@@ -1,0 +1,4 @@
+project_id = "neotdgoftxkfaljpmddk"
+
+[functions.leads-intake]
+verify_jwt = false

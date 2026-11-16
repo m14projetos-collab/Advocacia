@@ -1,0 +1,1 @@
+Validação estática: parser PostgreSQL e funções PL/pgSQL aprovados; templates SQL dinâmicos analisados; vercel.json válido; 12 tabelas incluídas em RLS. Nenhum comando SQL executado. Testes de execução, permissões, idempotência e integração pendentes de autorização e ambiente de teste.
