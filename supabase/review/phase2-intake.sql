@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS m14_private.intake_rate_limits (
   PRIMARY KEY (ip_hash, window_bucket)
 );
 
+ALTER TABLE m14_private.intake_rate_limits ENABLE ROW LEVEL SECURITY;
+
 REVOKE ALL ON TABLE m14_private.intake_rate_limits FROM PUBLIC, anon, authenticated;
 GRANT ALL ON TABLE m14_private.intake_rate_limits TO service_role;
 
@@ -29,6 +31,9 @@ DECLARE
   v_bucket timestamptz := date_trunc('hour', now());
   v_hits integer;
 BEGIN
+  IF p_ip_hash IS NULL OR p_ip_hash !~ '^[0-9a-f]{64}$' OR p_limit IS NULL OR p_limit NOT BETWEEN 1 AND 100 THEN
+    RAISE EXCEPTION 'Parâmetros inválidos para rate limit.' USING ERRCODE = '22023';
+  END IF;
   INSERT INTO m14_private.intake_rate_limits (ip_hash, window_bucket, hits)
   VALUES (p_ip_hash, v_bucket, 1)
   ON CONFLICT (ip_hash, window_bucket)
@@ -41,5 +46,15 @@ $$;
 
 REVOKE ALL ON FUNCTION m14_private.check_intake_rate_limit(text, integer) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION m14_private.check_intake_rate_limit(text, integer) TO service_role;
+
+-- Wrapper na Data API pública; execução exclusivamente pela Edge Function de serviço.
+-- USAGE no schema privado permite resolver a chamada SQL, sem expô-lo no PostgREST.
+GRANT USAGE ON SCHEMA m14_private TO service_role;
+CREATE OR REPLACE FUNCTION public.check_intake_rate_limit(p_ip_hash text, p_limit integer DEFAULT 5)
+RETURNS boolean LANGUAGE sql SECURITY INVOKER SET search_path = '' AS $$
+  SELECT m14_private.check_intake_rate_limit(p_ip_hash, p_limit);
+$$;
+REVOKE ALL ON FUNCTION public.check_intake_rate_limit(text, integer) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.check_intake_rate_limit(text, integer) TO service_role;
 
 COMMIT;

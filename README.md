@@ -1,25 +1,45 @@
-# M14 Advocacia — Matheus Moraes Advocacia
+# M14 Advocacia — Matheus Moraes
 
-Portal Público Editorial + Base Supabase (Fase 1 e Fase 2 consolidadas).
+Portal público (Fases 1–2) e CRM interno (Fase 3). React + Vite + TypeScript + Tailwind, Supabase Auth/Postgres e hospedagem Vercel.
 
-## 1. Subir para o GitHub (`m14projetos-collab/Advocacia`)
-```bash
-git init
-git add .
-git commit -m "feat: fase 1 e 2 - schema supabase, edge leads-intake e portal matheus moraes"
-git branch -M main
-git remote add origin https://github.com/m14projetos-collab/Advocacia.git
-git push -u origin main
+## Desenvolvimento
+
+Requer Node.js 22+ e npm. A estrutura original foi recuperada do ZIP versionado; os arquivos de aplicação ficam em `src/`, os SQLs em `supabase/review/` e a Edge Function em `supabase/functions/leads-intake/`.
+
+```sh
+npm install
+cp .env.example .env
+npm run dev
 ```
 
-## 2. Banco Supabase (`neotdgoftxkfaljpmddk`)
-1. Execute `supabase/review/phase1-schema.sql` no SQL Editor (ou via `supabase db push --linked`).
-2. Execute `supabase/review/phase2-intake.sql` para revogar o `INSERT` direto de `anon` e ativar o rate limit em `m14_private`.
-3. Configure os secrets e publique a Edge Function:
-```bash
-supabase secrets set ALLOWED_ORIGINS="https://seu-dominio.vercel.app" INTAKE_ENABLED="true" INTAKE_HASH_SECRET="$(openssl rand -hex 32)" --project-ref neotdgoftxkfaljpmddk
-supabase functions deploy leads-intake --project-ref neotdgoftxkfaljpmddk
+Preencha `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` com os valores públicos do projeto. Nunca use `service_role` em `VITE_*`. O CRM exige também um usuário Auth com `profiles.is_active = true`.
+
+## Rotas
+
+- `/`: portal público preservado.
+- `/crm/login`: acesso de membros ativos; sem cadastro público de equipe.
+- `/crm`: funil com seis etapas, busca, resumo dos leads e conversão.
+- `/crm/clientes`: clientes, contato, endereço e casos vinculados.
+- `/crm/agenda` e `/crm/financeiro`: módulos identificados como Fase 4, sem operações habilitadas.
+
+## Intake público e Turnstile
+
+O envio só é habilitado com `VITE_INTAKE_ENABLED=true`, uma `VITE_TURNSTILE_SITE_KEY` configurada e token Turnstile válido. Desabilitado ou sem site key, o portal oferece WhatsApp e não carrega o widget. O secret Turnstile, `INTAKE_HASH_SECRET` (32+ caracteres) e `INTAKE_ENABLED` ficam exclusivamente na Edge Function. Expiração ou falha invalida o token; cada tentativa exige nova verificação.
+
+A Edge Function usa `public.check_intake_rate_limit`, executável somente por `service_role`, mantendo `m14_private` fora da Data API. CAPTCHA, configuração ou RPC com falha bloqueiam o INSERT. Reaplicar o SQL da Fase 2 corrigido e publicar a Edge Function antes de habilitar o intake.
+
+## Supabase e Vercel
+
+Siga o [checklist de aplicação da Fase 3](docs/fase3-aplicacao.md). Os SQLs são scripts de revisão, não migrations registradas no CLI. Não use `supabase db push` esperando que ele encontre `supabase/review/`.
+
+## Validação
+
+```sh
+npm run build
+npm test
+npm run test:browser
 ```
 
-## 3. Vercel
-Conecte o repositório `m14projetos-collab/Advocacia` e configure as variáveis de `.env.example` (com `VITE_INTAKE_ENABLED=true`).
+`npm test` aplica as três fases em Postgres WASM descartável (PGlite), exercita RLS, ACLs, RPC, deduplicação, conflitos e rollback. Não acessa o banco hospedado. Os testes da Edge Function executam o código em runtime simulado com respostas de Siteverify/Supabase controladas, incluindo falha fechada. Os testes de navegador usam Chromium e simulam as respostas HTTP do Supabase/BrasilAPI; verificam a interface e o contrato das chamadas. Por padrão usam `/usr/bin/chromium`; informe `CHROMIUM_PATH` para outro executável. Uma instalação local também pode usar `npx playwright install chromium` e apontar `CHROMIUM_PATH` para o binário instalado.
+
+A confirmação final no Supabase/Vercel requer aplicar os scripts, configurar os valores públicos e usar uma conta interna. Nenhum SQL é aplicado automaticamente pelo build.
