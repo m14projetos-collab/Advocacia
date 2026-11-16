@@ -74,7 +74,7 @@ test('login ativo, Kanban, consultas BrasilAPI, revisão e conversão', async ({
   await dialog.getByRole('checkbox').check();
   await convert.click();
   await expect(dialog).toHaveCount(0);
-  await expect(page.getByRole('status')).toContainText('convertido');
+  await expect(page.getByRole('status').filter({ hasText: 'Atendimento convertido.' })).toBeVisible();
   expect(calls.find(call => call.path.endsWith('/convert_lead'))?.body).toMatchObject({ p_review_token: 'review-test', p_document_type: 'cnpj', p_title: 'Revisão contratual' });
   await page.getByRole('link', { name: /Agenda/ }).click();
   await expect(page.getByRole('heading', { name: 'Compromissos, consultas e prazos' })).toBeVisible();

@@ -14,7 +14,7 @@ Os scripts abaixo não foram aplicados ao projeto hospedado nesta entrega. Inspe
 - [ ] Em instalação nova: executar `supabase/review/phase1-schema.sql` no SQL Editor como `postgres`.
 - [ ] Executar `supabase/review/phase2-intake.sql` logo após a Fase 1: revoga o INSERT público direto de leads.
 - [ ] Executar `supabase/review/phase3-crm.sql` após as duas anteriores.
-- [ ] Se Fases 1–2 já foram aplicadas e conferidas, executar somente Fase 3. Reaplicar a Fase 1 isoladamente pode restabelecer permissões que as fases seguintes revogam. Se reaplicar tudo, manter a ordem 1 → 2 → 3.
+- [ ] Se Fases 1–2 já foram aplicadas e conferidas, reaplicar a Fase 2 corrigida deste PR antes da Fase 3; o wrapper público de rate limit foi adicionado nesta revisão. Se a Fase 3 já estiver aplicada, reaplicar apenas a Fase 2 corrigida é suficiente para esta correção do intake. Reaplicar a Fase 1 isoladamente pode restabelecer permissões que as fases seguintes revogam. Se reaplicar tudo, manter a ordem 1 → 2 → 3.
 - [ ] Manter `m14_private` fora dos schemas expostos na Data API. Expor `public`, incluindo as RPCs públicas da Fase 3.
 - [ ] Criar/convidar o usuário da equipe em Authentication. Não criar senha ou conta no frontend.
 - [ ] Cadastrar `profiles` com o mesmo UUID de `auth.users`, `full_name`, `role` (`admin`/`staff`) e `is_active=true`. Não existe promoção de papel via navegador.
@@ -27,18 +27,24 @@ INSERT INTO public.profiles(id, full_name, role, is_active)
 VALUES ('UUID-REAL-DO-USUARIO-AUTH', 'Nome do membro', 'staff', true);
 ```
 
-## Edge Function `leads-intake` — Fase 2 preservada
+## Edge Function `leads-intake` — correções do intake público
 
 - [ ] Conferir `supabase/config.toml`: `verify_jwt=false` é intencional para o intake público. A credencial de serviço fica somente no ambiente da Edge Function.
-- [ ] Configurar `APP_ORIGIN` ou `ALLOWED_ORIGINS` com as origens exatas do portal (incluindo previews que serão usados); configurar `INTAKE_HASH_SECRET` aleatório e exclusivo.
-- [ ] Publicar com `supabase functions deploy leads-intake --project-ref neotdgoftxkfaljpmddk` após conferir o projeto e autenticar o CLI.
-- [ ] Manter `INTAKE_ENABLED=false` até concluir o aceite de segurança do intake. O CRM pode ser usado independentemente da entrada pública.
+- [ ] Reaplicar `phase2-intake.sql` corrigido para criar `public.check_intake_rate_limit`. A função pública é `SECURITY INVOKER`, com `REVOKE ALL FROM PUBLIC, anon, authenticated` e execução apenas por `service_role`. O núcleo privilegiado e os contadores com RLS permanecem em `m14_private`, sem expor esse schema na Data API. O `GRANT USAGE` ao serviço serve somente para resolver a chamada interna.
+- [ ] Configurar `APP_ORIGIN` ou `ALLOWED_ORIGINS` com origens HTTPS exatas do portal (sem caminho; incluir previews que serão usados). O hostname do token precisa pertencer a essas origens.
+- [ ] Configurar `INTAKE_HASH_SECRET` aleatório, exclusivo e com pelo menos 32 caracteres. Não existe mais salt padrão; IP bruto e token CAPTCHA não são inseridos no lead.
+- [ ] Criar/configurar o widget Turnstile no Cloudflare com os domínios do portal permitidos. Usar sua site key pública em `VITE_TURNSTILE_SITE_KEY` e o secret correspondente somente em `TURNSTILE_SECRET_KEY` da Edge Function. Nunca usar as chaves de teste em produção.
+- [ ] Publicar a Edge Function atualizada com `supabase functions deploy leads-intake --project-ref neotdgoftxkfaljpmddk` após conferir o projeto e autenticar o CLI.
+- [ ] Inicialmente manter `VITE_INTAKE_ENABLED=false` e `INTAKE_ENABLED=false`. Habilitar ambos somente depois de aplicar o SQL corrigido, configurar as chaves e testar em homologação; alterar `VITE_*` exige novo build Vercel.
 
-**Limitações verificadas na Fase 2 existente:** o formulário envia `turnstile_token` vazio. Configurar `TURNSTILE_SECRET_KEY` fará a Edge Function recusar o envio até integrar o widget/token ao portal. Além disso, a função tenta chamar `check_intake_rate_limit` por `.schema('m14_private')`, enquanto a arquitetura proíbe expor esse schema; o erro é registrado e o código continua o INSERT. Portanto não considerar CAPTCHA/rate limit operacionais apenas por executar o SQL. Antes de habilitar intake público, corrigir a ponte de RPC de serviço mantendo o schema privado, adotar falha fechada e integrar/testar o token Turnstile. Essas pendências preexistentes não foram misturadas à implementação do CRM.
+O widget usa renderização explícita no segundo passo, com action `leads_intake`. Só habilita envio após receber token; expiração/erro/timeout invalidam o token. Voltar ao primeiro passo remove o widget. Cada tentativa HTTP consome o token e remonta a verificação, inclusive em erro de rede/servidor. Falha ao carregar o script bloqueia envio e oferece nova tentativa. Se `VITE_INTAKE_ENABLED` não for exatamente `true`, ou a site key estiver ausente, não há formulário nem carregamento do script: o portal oferece WhatsApp.
+
+A Edge Function verifica o token no Siteverify com timeout, exige sucesso, action `leads_intake` e hostname permitido. Ausência de secrets/configuração retorna 503; token inválido/expirado/repetido ou falha no Siteverify retorna 403. Depois chama `.rpc('check_intake_rate_limit', ...)` no schema público: falso retorna 429 e erro/resultado inesperado retorna 503. Nenhuma dessas falhas prossegue para INSERT. O projeto Supabase não precisa expor `m14_private`.
 
 ## Vercel
 
 - [ ] Configurar `VITE_SUPABASE_URL=https://neotdgoftxkfaljpmddk.supabase.co`.
+- [ ] Configurar `VITE_TURNSTILE_SITE_KEY` com a site key pública e manter `VITE_INTAKE_ENABLED=false` até o aceite do intake.
 - [ ] Configurar `VITE_SUPABASE_PUBLISHABLE_KEY` com a chave pública do projeto (nunca `service_role`).
 - [ ] Completar os demais valores públicos de `.env.example`, inclusive a identificação profissional já prevista no portal.
 - [ ] Manter build `npm run build`, output `dist` e o rewrite SPA de `vercel.json`. Os acessos diretos a `/crm/login`, `/crm/clientes`, `/crm/agenda` e `/crm/financeiro` precisam servir `index.html`.
@@ -60,6 +66,10 @@ VALUES ('UUID-REAL-DO-USUARIO-AUTH', 'Nome do membro', 'staff', true);
 
 ## Aceite após publicação
 
+- [ ] Com intake desabilitado ou sem site key: exibir WhatsApp, não carregar Turnstile nem enviar requisição de cadastro.
+- [ ] Em homologação com chaves correspondentes: validar o widget e confirmar envio com token, action e hostname corretos. Tentar enviar antes de validar, após expiração e após falha/repetição: bloquear e exigir nova verificação.
+- [ ] Simular indisponibilidade do rate limit: retornar 503 sem INSERT. Exceder o limite: retornar 429. Conferir que `anon` e `authenticated` não executam a RPC pública.
+
 - [ ] Abrir `/crm/clientes` sem sessão: mostrar login e não consultar as tabelas internas.
 - [ ] Entrar com conta sem perfil ou com perfil inativo: negar o painel. Entrar com membro ativo: carregar o funil.
 - [ ] Mover lead não convertido entre etapas abertas e arquivar/reabrir. Confirmar que fechamento direto é negado.
@@ -73,6 +83,6 @@ VALUES ('UUID-REAL-DO-USUARIO-AUTH', 'Nome do membro', 'staff', true);
 
 ## Evidência local e limites
 
-`npm run build` executa TypeScript em modo estrito e compila o bundle. `npm test` aplica as Fases 1–3 e reaplica Fase 3 em PGlite descartável: documentos (inclusive CNPJ alfanumérico), anon/inativos/sem perfil, ACLs, conversão, auditoria, repetição, reutilização, conflitos, revisão desatualizada e rollback completo. `npm run test:browser` usa Chromium com HTTP simulado: login, bloqueio de perfil inativo, Kanban, consultas, revisão, conversão, revogação de acesso, clientes/casos, erros e mobile.
+`npm run build` executa TypeScript em modo estrito e compila o bundle. `npm test` verifica a Edge Function em um runtime simulado (Siteverify e cliente Supabase simulados), incluindo falha fechada, token inválido, action/hostname, erro da RPC, 429 e envio válido. Também aplica as Fases 1–3 e reaplica Fase 3 em PGlite descartável: documentos (inclusive CNPJ alfanumérico), anon/inativos/sem perfil, ACLs, conversão, auditoria, repetição, reutilização, conflitos, revisão desatualizada e rollback completo. `npm run test:browser` usa Chromium com HTTP simulado: login, bloqueio de perfil inativo, Kanban, consultas, revisão, conversão, revogação de acesso, clientes/casos, erros e mobile. Os novos cenários de intake simulam o script Turnstile para testar bloqueio, expiração, renovação após falha, remoção ao voltar e carregamento indisponível; ambientes separados cobrem intake desabilitado e site key ausente.
 
 Esses testes não comprovam a configuração do Supabase hospedado, a disponibilidade real da BrasilAPI ou o deploy Vercel. Nenhum dado real de cliente foi utilizado. O aceite acima fecha essas fronteiras após aplicação pelo responsável.

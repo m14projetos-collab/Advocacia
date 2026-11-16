@@ -1,6 +1,7 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { CheckCircle2, AlertCircle, Lock, ArrowRight, ArrowLeft } from 'lucide-react';
 import { PRACTICE_AREAS, PracticeAreaKey, OFFICE_DATA } from '../data/office';
+import { TurnstileWidget } from './TurnstileWidget';
 import { formatBrazilPhoneDisplay, normalizePhoneToE164 } from '../lib/phone';
 
 interface IntakeFormProps {
@@ -8,6 +9,10 @@ interface IntakeFormProps {
 }
 
 export function IntakeForm({ selectedArea }: IntakeFormProps) {
+  const intakeEnabled = import.meta.env.VITE_INTAKE_ENABLED === 'true';
+  const siteKey = (import.meta.env.VITE_TURNSTILE_SITE_KEY ?? '').trim();
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const [widgetAttempt, setWidgetAttempt] = useState(0);
   const [step, setStep] = useState<1 | 2>(1);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -41,6 +46,11 @@ export function IntakeForm({ selectedArea }: IntakeFormProps) {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setErrorMsg(null);
+    if (submitting) return;
+    if (!intakeEnabled || !siteKey || !turnstileToken) {
+      setErrorMsg('Conclua a verificação de segurança antes de enviar ou utilize o WhatsApp.');
+      return;
+    }
 
     const e164Phone = normalizePhoneToE164(phone);
     if (!e164Phone) {
@@ -64,9 +74,12 @@ export function IntakeForm({ selectedArea }: IntakeFormProps) {
     }
 
     setSubmitting(true);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
     try {
       const response = await fetch(`${supabaseUrl}/functions/v1/leads-intake`, {
         method: 'POST',
+        signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
           apikey: anonKey,
@@ -79,7 +92,7 @@ export function IntakeForm({ selectedArea }: IntakeFormProps) {
           urgency,
           summary: summary.trim(),
           lgpd_consent: true,
-          turnstile_token: '',
+          turnstile_token: turnstileToken,
         }),
       });
 
@@ -93,6 +106,9 @@ export function IntakeForm({ selectedArea }: IntakeFormProps) {
     } catch {
       setErrorMsg('Falha de conexão ao enviar. Tente novamente ou chame no WhatsApp.');
     } finally {
+      clearTimeout(timeout);
+      setTurnstileToken('');
+      setWidgetAttempt(value => value + 1);
       setSubmitting(false);
     }
   }
@@ -129,7 +145,13 @@ export function IntakeForm({ selectedArea }: IntakeFormProps) {
 
         <div className="lg:col-span-7">
           <div className="rounded-sm border border-white/15 bg-slatecard p-6 sm:p-8">
-            {submitted ? (
+            {!intakeEnabled || !siteKey ? (
+              <div className="space-y-4 py-8">
+                <h3 className="font-serif text-2xl text-ivory">Atendimento pelo WhatsApp</h3>
+                <p className="text-sm text-slate-300">O formulário está temporariamente indisponível. Entre em contato com o escritório para organizar seu atendimento.</p>
+                <a className="inline-block border border-bronzeLight px-5 py-3 text-sm text-ivory" href={`https://wa.me/${OFFICE_DATA.whatsappE164}`}>Falar com o escritório no WhatsApp</a>
+              </div>
+            ) : submitted ? (
               <div className="py-8 text-center">
                 <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-400" strokeWidth={1.5} />
                 <h3 className="mt-4 font-serif text-2xl font-semibold text-ivory">
@@ -152,7 +174,7 @@ export function IntakeForm({ selectedArea }: IntakeFormProps) {
                 </div>
 
                 {errorMsg && (
-                  <div className="flex items-start gap-2.5 rounded-sm border border-rose-500/40 bg-rose-950/40 p-3 text-xs text-rose-200">
+                  <div role="alert" className="flex items-start gap-2.5 rounded-sm border border-rose-500/40 bg-rose-950/40 p-3 text-xs text-rose-200">
                     <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.5} />
                     <span>{errorMsg}</span>
                   </div>
@@ -161,10 +183,11 @@ export function IntakeForm({ selectedArea }: IntakeFormProps) {
                 {step === 1 ? (
                   <>
                     <div>
-                      <label className="mb-1.5 block text-xs font-medium text-slate-300">
+                      <label htmlFor="intake-name" className="mb-1.5 block text-xs font-medium text-slate-300">
                         Nome completo *
                       </label>
                       <input
+                        id="intake-name"
                         type="text"
                         required
                         value={name}
@@ -176,10 +199,11 @@ export function IntakeForm({ selectedArea }: IntakeFormProps) {
 
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div>
-                        <label className="mb-1.5 block text-xs font-medium text-slate-300">
+                        <label htmlFor="intake-phone" className="mb-1.5 block text-xs font-medium text-slate-300">
                           WhatsApp com DDD *
                         </label>
                         <input
+                          id="intake-phone"
                           type="tel"
                           required
                           value={phone}
@@ -189,10 +213,11 @@ export function IntakeForm({ selectedArea }: IntakeFormProps) {
                         />
                       </div>
                       <div>
-                        <label className="mb-1.5 block text-xs font-medium text-slate-300">
+                        <label htmlFor="intake-email" className="mb-1.5 block text-xs font-medium text-slate-300">
                           E-mail (opcional)
                         </label>
                         <input
+                          id="intake-email"
                           type="email"
                           value={email}
                           onChange={(e) => setEmail(e.target.value)}
@@ -203,10 +228,11 @@ export function IntakeForm({ selectedArea }: IntakeFormProps) {
                     </div>
 
                     <div>
-                      <label className="mb-1.5 block text-xs font-medium text-slate-300">
+                      <label htmlFor="intake-area" className="mb-1.5 block text-xs font-medium text-slate-300">
                         Área jurídica relacionada *
                       </label>
                       <select
+                        id="intake-area"
                         value={practiceArea}
                         onChange={(e) => setPracticeArea(e.target.value as PracticeAreaKey)}
                         className="w-full rounded-sm border border-white/15 bg-obsidian px-3.5 py-2.5 text-sm text-ivory focus:border-bronzeLight focus:outline-none"
@@ -232,10 +258,11 @@ export function IntakeForm({ selectedArea }: IntakeFormProps) {
                 ) : (
                   <>
                     <div>
-                      <label className="mb-1.5 block text-xs font-medium text-slate-300">
+                      <label htmlFor="intake-urgency" className="mb-1.5 block text-xs font-medium text-slate-300">
                         Nível de urgência
                       </label>
                       <select
+                        id="intake-urgency"
                         value={urgency}
                         onChange={(e) => setUrgency(e.target.value as 'normal' | 'alta' | 'urgente')}
                         className="w-full rounded-sm border border-white/15 bg-obsidian px-3.5 py-2.5 text-sm text-ivory focus:border-bronzeLight focus:outline-none"
@@ -247,10 +274,11 @@ export function IntakeForm({ selectedArea }: IntakeFormProps) {
                     </div>
 
                     <div>
-                      <label className="mb-1.5 block text-xs font-medium text-slate-300">
+                      <label htmlFor="intake-summary" className="mb-1.5 block text-xs font-medium text-slate-300">
                         Resumo breve da situação *
                       </label>
                       <textarea
+                        id="intake-summary"
                         rows={4}
                         required
                         value={summary}
@@ -273,9 +301,12 @@ export function IntakeForm({ selectedArea }: IntakeFormProps) {
                       </span>
                     </label>
 
+                    <TurnstileWidget key={widgetAttempt} siteKey={siteKey} onToken={setTurnstileToken} />
+
                     <div className="flex gap-3">
                       <button
                         type="button"
+                        disabled={submitting}
                         onClick={() => setStep(1)}
                         className="inline-flex items-center gap-1.5 rounded-sm border border-white/20 px-4 py-3 text-sm text-slate-300 transition hover:border-white/40"
                       >
@@ -284,7 +315,7 @@ export function IntakeForm({ selectedArea }: IntakeFormProps) {
                       </button>
                       <button
                         type="submit"
-                        disabled={submitting}
+                        disabled={submitting || !turnstileToken}
                         className="inline-flex flex-1 items-center justify-center rounded-sm bg-bronze px-5 py-3 text-sm font-semibold text-obsidian transition hover:bg-bronzeLight disabled:opacity-60"
                       >
                         {submitting ? 'Enviando...' : 'Enviar Solicitação'}

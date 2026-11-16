@@ -53,21 +53,30 @@ async function sha256Hex(input: string): Promise<string> {
 
 async function verifyTurnstile(token: string, remoteIp: string): Promise<boolean> {
   const secret = Deno.env.get('TURNSTILE_SECRET_KEY');
-  if (!secret) return true; // Permite testes controlados se a chave ainda não estiver configurada
-  if (!token) return false;
+  if (!secret) return false;
+  if (!token || token.length > 2048) return false;
 
   const form = new URLSearchParams();
   form.set('secret', secret);
   form.set('response', token);
-  if (remoteIp) form.set('remoteip', remoteIp);
+  if (remoteIp !== 'unknown') form.set('remoteip', remoteIp);
 
-  const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-    method: 'POST',
-    body: form,
-  });
-  if (!res.ok) return false;
-  const json = await res.json();
-  return Boolean(json.success);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST', body: form, signal: controller.signal,
+    });
+    if (!res.ok) return false;
+    const json = await res.json();
+    const origins = (Deno.env.get('APP_ORIGIN') ?? Deno.env.get('ALLOWED_ORIGINS') ?? '').split(',').map(value => value.trim()).filter(Boolean);
+    const hosts = origins.map(value => new URL(value).hostname);
+    return json.success === true && json.action === 'leads_intake' && hosts.includes(json.hostname);
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 Deno.serve(async (req: Request) => {
@@ -98,6 +107,15 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: 'Atendimento via portal temporariamente indisponível.' }), {
       status: 503,
       headers: { ...headers, 'Content-Type': 'application/json' },
+    });
+  }
+
+  const supabaseUrl = Deno.env.get('SUPABASE_URL');
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  const hashSecret = Deno.env.get('INTAKE_HASH_SECRET');
+  if (!supabaseUrl || !serviceRoleKey || !hashSecret || hashSecret.length < 32 || !Deno.env.get('TURNSTILE_SECRET_KEY')) {
+    return new Response(JSON.stringify({ error: 'Atendimento via portal temporariamente indisponível.' }), {
+      status: 503, headers: { ...headers, 'Content-Type': 'application/json' },
     });
   }
 
@@ -160,22 +178,21 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const hashSecret = Deno.env.get('INTAKE_HASH_SECRET') ?? 'm14-default-salt';
-
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },
     });
 
     const ipHash = await sha256Hex(`${remoteIp}:${hashSecret}`);
     const { data: allowedByRate, error: rateError } = await supabase
-      .schema('m14_private')
       .rpc('check_intake_rate_limit', { p_ip_hash: ipHash, p_limit: 8 });
 
-    if (rateError) {
-      console.error('Rate limit error:', rateError);
-    } else if (allowedByRate === false) {
+    if (rateError || (allowedByRate !== true && allowedByRate !== false)) {
+      console.error('Intake rate limiter unavailable');
+      return new Response(JSON.stringify({ error: 'Atendimento via portal temporariamente indisponível.' }), {
+        status: 503, headers: { ...headers, 'Content-Type': 'application/json' },
+      });
+    }
+    if (allowedByRate === false) {
       return new Response(JSON.stringify({ error: 'Muitas solicitações recentes. Tente novamente mais tarde.' }), {
         status: 429,
         headers: { ...headers, 'Content-Type': 'application/json' },
@@ -195,7 +212,7 @@ Deno.serve(async (req: Request) => {
     });
 
     if (insertError) {
-      console.error('Insert error:', insertError);
+      console.error('Intake insert failed');
       return new Response(JSON.stringify({ error: 'Não foi possível registrar seu atendimento agora.' }), {
         status: 500,
         headers: { ...headers, 'Content-Type': 'application/json' },
@@ -206,8 +223,8 @@ Deno.serve(async (req: Request) => {
       status: 201,
       headers: { ...headers, 'Content-Type': 'application/json' },
     });
-  } catch (err) {
-    console.error('Unexpected error:', err);
+  } catch {
+    console.error('Intake request failed');
     return new Response(JSON.stringify({ error: 'Requisição inválida.' }), {
       status: 400,
       headers: { ...headers, 'Content-Type': 'application/json' },

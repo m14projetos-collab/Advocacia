@@ -45,6 +45,23 @@ test('Fases 1–3: autorização, conversão, conflitos e rollback no Postgres',
   await db.query('INSERT INTO auth.users VALUES ($1),($2),($3)', [actor, inactive, noProfile]);
   await db.query(`INSERT INTO public.profiles(id, full_name, is_active) VALUES ($1,'Equipe Teste',true),($2,'Inativo Teste',false)`, [actor,inactive]);
 
+  await t.test('RPC pública de rate limit só é executável por service_role e mantém os contadores privados', async () => {
+    const hash='a'.repeat(64);
+    for(const role of ['anon','authenticated']) {
+      await asRole(role,actor);
+      await assert.rejects(db.query('SELECT public.check_intake_rate_limit($1,2)',[hash]),/permission denied/);
+      await assert.rejects(db.query('SELECT * FROM m14_private.intake_rate_limits'),/permission denied/);
+    }
+    await asRole('service_role');
+    for(const allowed of [true,true,false]) assert.equal((await db.query('SELECT public.check_intake_rate_limit($1,2) allowed',[hash])).rows[0].allowed,allowed);
+    await assert.rejects(db.query('SELECT public.check_intake_rate_limit($1,2)',['raw-ip']),/inválidos/);
+    await asRole('postgres');
+    // Reaplicar a Fase 2 corrigida não perde contadores nem reabre o intake anônimo.
+    await db.exec(await readFile('supabase/review/phase2-intake.sql','utf8'));
+    assert.equal((await db.query('SELECT hits FROM m14_private.intake_rate_limits WHERE ip_hash=$1',[hash])).rows[0].hits,3);
+    const acl=(await db.query("SELECT has_function_privilege('anon','public.check_intake_rate_limit(text,integer)','EXECUTE') anon, has_function_privilege('authenticated','public.check_intake_rate_limit(text,integer)','EXECUTE') member, has_function_privilege('service_role','public.check_intake_rate_limit(text,integer)','EXECUTE') service")).rows[0];
+    assert.deepEqual(acl,{anon:false,member:false,service:true});
+  });
   await t.test('valida CPF, CNPJ e rejeita dígitos/adulterações', async () => {
     await asRole('authenticated', actor);
     for (const [type, doc, valid] of [['cpf','52998224725',true],['cpf','11111111111',false],['cpf','52998224724',false],['cnpj','62575046000196',true],['cnpj','00000000000000',false],['cnpj','12ABC34501DE35',true],['cpf','52998224725x',false]]) {

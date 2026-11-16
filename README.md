@@ -22,6 +22,12 @@ Preencha `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` com os valores p�
 - `/crm/clientes`: clientes, contato, endereço e casos vinculados.
 - `/crm/agenda` e `/crm/financeiro`: módulos identificados como Fase 4, sem operações habilitadas.
 
+## Intake público e Turnstile
+
+O envio só é habilitado com `VITE_INTAKE_ENABLED=true`, uma `VITE_TURNSTILE_SITE_KEY` configurada e token Turnstile válido. Desabilitado ou sem site key, o portal oferece WhatsApp e não carrega o widget. O secret Turnstile, `INTAKE_HASH_SECRET` (32+ caracteres) e `INTAKE_ENABLED` ficam exclusivamente na Edge Function. Expiração ou falha invalida o token; cada tentativa exige nova verificação.
+
+A Edge Function usa `public.check_intake_rate_limit`, executável somente por `service_role`, mantendo `m14_private` fora da Data API. CAPTCHA, configuração ou RPC com falha bloqueiam o INSERT. Reaplicar o SQL da Fase 2 corrigido e publicar a Edge Function antes de habilitar o intake.
+
 ## Supabase e Vercel
 
 Siga o [checklist de aplicação da Fase 3](docs/fase3-aplicacao.md). Os SQLs são scripts de revisão, não migrations registradas no CLI. Não use `supabase db push` esperando que ele encontre `supabase/review/`.
@@ -34,6 +40,6 @@ npm test
 npm run test:browser
 ```
 
-`npm test` aplica as três fases em Postgres WASM descartável (PGlite), exercita RLS, ACLs, RPC, deduplicação, conflitos e rollback. Não acessa o banco hospedado. Os testes de navegador usam Chromium e simulam as respostas HTTP do Supabase/BrasilAPI; verificam a interface e o contrato das chamadas. Por padrão usam `/usr/bin/chromium`; informe `CHROMIUM_PATH` para outro executável. Uma instalação local também pode usar `npx playwright install chromium` e apontar `CHROMIUM_PATH` para o binário instalado.
+`npm test` aplica as três fases em Postgres WASM descartável (PGlite), exercita RLS, ACLs, RPC, deduplicação, conflitos e rollback. Não acessa o banco hospedado. Os testes da Edge Function executam o código em runtime simulado com respostas de Siteverify/Supabase controladas, incluindo falha fechada. Os testes de navegador usam Chromium e simulam as respostas HTTP do Supabase/BrasilAPI; verificam a interface e o contrato das chamadas. Por padrão usam `/usr/bin/chromium`; informe `CHROMIUM_PATH` para outro executável. Uma instalação local também pode usar `npx playwright install chromium` e apontar `CHROMIUM_PATH` para o binário instalado.
 
 A confirmação final no Supabase/Vercel requer aplicar os scripts, configurar os valores públicos e usar uma conta interna. Nenhum SQL é aplicado automaticamente pelo build.
