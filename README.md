@@ -1,6 +1,6 @@
 # M14 Advocacia — Matheus Moraes
 
-Portal público (Fases 1–2) e CRM interno (Fases 3–5), agenda e financeiro InfinitePay. React + Vite + TypeScript + Tailwind, Supabase Auth/Postgres e hospedagem Vercel.
+Portal público (Fases 1–2) e CRM interno (Fases 3–6), agenda e financeiro InfinitePay. React + Vite + TypeScript + Tailwind, Supabase Auth/Postgres e hospedagem Vercel.
 
 ## Desenvolvimento
 
@@ -18,11 +18,16 @@ Preencha `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` com os valores p�
 
 - `/`: portal público preservado.
 - `/crm/login`: acesso de membros ativos; sem cadastro público de equipe.
-- `/crm`: funil com seis etapas, busca, resumo dos leads e conversão.
+- `/crm`: Hoje no Escritório, prazos, reuniões, SLA e cobranças.
+- `/crm/funil`: seis etapas, busca, SLA e conversão.
 - `/crm/clientes`: clientes, contato, endereço e casos vinculados.
-- `/crm/conta`: perfil e alteração da própria senha com confirmação e mínimo de 8 caracteres.
+- `/crm/conta`: perfil editável com OAB/UF, telefone/bio e alteração da própria senha com confirmação e mínimo de 8 caracteres.
 - `/crm/agenda`: calendário, criação/edição de compromissos e calculadora auxiliar de prazos CPC.
 - `/crm/financeiro`: cobranças InfinitePay, consultas pagas e conferência no provedor.
+- `/crm/hub`: ficha 360º, WhatsApp/ligações, documentos privados, DataJud, agenda/financeiro, e-mails e kit inicial revisável para impressão/PDF.
+- `/crm/emails`: triagem de correspondência com prioridade auxiliar, CNJ e vínculo revisado.
+- `/crm/copiloto`: agente interno e base oficial por área/jurisdição, atualização manual e citação validada.
+- `/crm/agente`: configuração admin do tom do Matheus e autorizações de IA.
 - `/pagamento/retorno`: retorno público do comprador, sem baixa por parâmetros da URL.
 
 ## Intake público e Turnstile
@@ -37,7 +42,7 @@ A Edge Function usa `public.check_intake_rate_limit`, executável somente por `s
 
 ## Supabase e Vercel
 
-Siga o [checklist único de implantação](docs/implantacao-unica.md) e o [relatório de auditoria/benchmark](docs/fase5-auditoria.md). Os SQLs em `supabase/review/` são revisões, não migrations descobertas por `db push`. A Fase 5 acrescenta `phase5-whatsapp-ai.sql` e as Edge Functions descritas no checklist. Nenhum SQL é aplicado pelo build, e flags de integração permanecem desabilitadas até configuração/aceite.
+Siga o [checklist único de implantação](docs/implantacao-unica.md) e os relatórios de [auditoria/benchmark da Fase 5](docs/fase5-auditoria.md) e [refinamento/auditoria da Fase 6](docs/fase6-auditoria.md). Os SQLs em `supabase/review/` são revisões, não migrations descobertas por `db push`. A Fase 6 acrescenta `phase6-refinement-and-legal-hub.sql` às fases anteriores, com 17 Edge Functions no total. Nenhum SQL é aplicado pelo build, e flags de integração permanecem desabilitadas até configuração/aceite.
 
 ## Validação
 
@@ -47,6 +52,6 @@ npm test
 npm run test:browser
 ```
 
-`npm test` aplica as cinco fases em suítes de integração em Postgres WASM descartável (PGlite), exercita RLS, ACLs, RPC, deduplicação, conflitos e rollback. Não acessa o banco hospedado. Os testes da Edge Function executam o código em runtime simulado com respostas de Siteverify/Supabase controladas, incluindo falha fechada, aprovação financeira e callbacks inválidos. Os testes de prazos cobrem o CPC e as conversões de fuso. Os testes de navegador usam Chromium e simulam as respostas HTTP do Supabase/BrasilAPI/InfinitePay/WhatsApp/IA; verificam a interface e o contrato das chamadas. Por padrão usam `/usr/bin/chromium`; informe `CHROMIUM_PATH` para outro executável. Uma instalação local também pode usar `npx playwright install chromium` e apontar `CHROMIUM_PATH` para o binário instalado.
+`npm test` aplica as seis fases em suítes de integração em Postgres WASM descartável (PGlite), exercita RLS, ACLs, RPC, deduplicação, conflitos e rollback. Não acessa o banco hospedado. Os testes da Edge Function executam o código em runtime simulado com respostas de Siteverify/Supabase controladas, incluindo falha fechada, aprovação financeira, Svix/HMAC, SMTPS, kit e bloqueio de citação jurídica sem suporte. Os testes de prazos cobrem o CPC e as conversões de fuso. Os testes de navegador usam Chromium e simulam as respostas HTTP do Supabase/BrasilAPI/InfinitePay/WhatsApp/IA; verificam a interface e o contrato das chamadas. Por padrão usam `/usr/bin/chromium`; informe `CHROMIUM_PATH` para outro executável. Uma instalação local também pode usar `npx playwright install chromium` e apontar `CHROMIUM_PATH` para o binário instalado.
 
 A confirmação final no Supabase/Vercel requer aplicar os scripts, configurar os valores públicos e usar uma conta interna. Nenhum SQL é aplicado automaticamente pelo build.

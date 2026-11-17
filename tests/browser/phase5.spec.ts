@@ -112,6 +112,7 @@ async function setup(page: Page, role = "staff") {
       const body = route.request().postDataJSON();
       calls.push({ name, body, headers: route.request().headers() });
       let result: unknown = {};
+      if(name === "product-hub") result = body.operation === "dashboard" ? {today:"2026-11-17",appointments:[],payments:[],unanswered:[]} : {parties:[],conflicts:[],kits:[],emails:[]};
       if (name === "case-hub") {
         if (body.operation === "message_case")
           snapshot.messages[0].case_id = caseId;
@@ -163,7 +164,7 @@ async function setup(page: Page, role = "staff") {
 async function hub(page: Page) {
   await login(page);
   await expect(
-    page.getByRole("heading", { name: "Funil de atendimento", exact: true }),
+    page.getByRole("heading", { name: "Hoje no Escritório", exact: true }),
   ).toBeVisible();
   await page.goto(`/crm/hub?case_id=${caseId}`);
   await expect(
@@ -176,6 +177,7 @@ test("ficha preserva contexto, vincula mensagem, envia resposta revisada e regis
 }) => {
   const { calls, errors } = await setup(page);
   await hub(page);
+  await page.getByRole("tab",{name:"WhatsApp e ligações"}).click();
   await expect(
     page.getByText("Mensagem recebida no cliente", { exact: true }),
   ).toBeVisible();
@@ -321,14 +323,14 @@ test("atalho do caso preenche agenda e cobrança sem recadastrar cliente", async
     .click();
   await expect(
     page.getByRole("combobox", { name: "Caso vinculado", exact: true }),
-  ).toHaveValue(caseId);
+  ).toHaveValue("Caso integrado");
   await expect(
     page.getByRole("combobox", { name: "Atendimento vinculado", exact: true }),
-  ).toHaveValue(lead.id);
+  ).toHaveValue(lead.name);
   await page.goto(`/crm/hub?case_id=${caseId}`);
   await page.getByRole("link", { name: "Cobrar deste cliente →" }).click();
-  await expect(page.getByLabel("Cliente da cobrança")).toHaveValue(clientId);
-  await expect(page.getByLabel("Caso da cobrança")).toHaveValue(caseId);
+  await expect(page.getByRole("combobox",{name:"Cliente da cobrança",exact:true})).toHaveValue("Cliente do Hub");
+  await expect(page.getByRole("combobox",{name:"Caso da cobrança",exact:true})).toHaveValue("Caso integrado");
 });
 test("desktop e mobile não possuem links internos vazios, âncoras inexistentes ou erros de console", async ({
   page,

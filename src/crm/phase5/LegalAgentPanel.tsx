@@ -1,3 +1,4 @@
+import { SearchableCombobox } from "../components/SearchableCombobox";
 import { useState } from "react";
 import { invoke } from "../phase4/api";
 import { message } from "../types";
@@ -95,26 +96,23 @@ export function LegalAgentPanel({
             </option>
           </select>
         </label>
-        <label>
-          Documento como fonte (opcional, até 5 MB)
-          <select
-            value={doc}
-            disabled={busy || !context.case_id}
-            onChange={(e) => {
-              setDoc(e.target.value);
-              setId(crypto.randomUUID());
-            }}
-          >
-            <option value="">Sem documento</option>
-            {documents
-              .filter((d) => d.size_bytes <= 5 * 1024 * 1024)
-              .map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.original_name}
-                </option>
-              ))}
-          </select>
-        </label>
+        <SearchableCombobox
+          label="Documento como fonte (opcional, até 5 MB)"
+          value={doc}
+          disabled={busy || !context.case_id}
+          options={documents
+            .filter((d) => d.size_bytes <= 5 * 1024 * 1024)
+            .map((d) => ({
+              value: d.id,
+              label: d.original_name,
+              recent: d.created_at,
+            }))}
+          onChange={(value) => {
+            setDoc(value);
+            setId(crypto.randomUUID());
+          }}
+          emptyLabel="Sem documento"
+        />
         <label className="crm-inline-check">
           <input
             type="checkbox"

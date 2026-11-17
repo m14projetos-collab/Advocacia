@@ -60,6 +60,7 @@ test("Fase 5: vínculos, perfis, Storage privado, outbox e IA", async (t) => {
     "phase3-crm.sql",
     "phase4-agenda-finance.sql",
     "phase5-whatsapp-ai.sql",
+    "phase6-refinement-and-legal-hub.sql",
   ])
     await db.exec(await readFile(`supabase/review/${phase}`, "utf8"));
   await db.query("INSERT INTO auth.users VALUES($1),($2),($3)", [

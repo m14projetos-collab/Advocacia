@@ -54,6 +54,7 @@ export async function api(page: Page, active = true) {
             bio: null,
           }
         : null;
+    else if(url.pathname.endsWith("/product-hub")) {const input=req.postDataJSON();body=input.operation==='dashboard'?{today:'2026-11-17',appointments:[],unanswered:[],payments:[]}:input.operation==='details'?{parties:[],conflicts:[],kits:[],emails:[]}:{};}
     else if (url.pathname.endsWith("/leads_intake"))
       body = [req.method() === "PATCH" ? { id: lead.id } : lead];
     else if (

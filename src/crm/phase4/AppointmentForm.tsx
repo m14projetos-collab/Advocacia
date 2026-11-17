@@ -1,3 +1,6 @@
+import { SearchableCombobox } from "../components/SearchableCombobox";
+import { caseOptions, leadOptions } from "../phase6/options";
+import { Client } from "../types";
 import { FormEvent, useState } from "react";
 import { Case, Lead, message } from "../types";
 import { contextFromUrl } from "../phase5/types";
@@ -11,6 +14,7 @@ export function AppointmentForm({
   type,
   leads,
   cases,
+  clients = [],
   onSaved,
   onClose,
 }: {
@@ -20,6 +24,7 @@ export function AppointmentForm({
   type?: Appointment["type"];
   leads: Lead[];
   cases: Case[];
+  clients?: Client[];
   onSaved: () => void;
   onClose: () => void;
 }) {
@@ -32,8 +37,12 @@ export function AppointmentForm({
     existing ? officeInput(existing.ends_at) : `${date}T10:00`,
   );
   const initial = contextFromUrl();
-  const [caseId, setCaseId] = useState(existing?.case_id ?? initial.case_id ?? "");
-  const [leadId, setLeadId] = useState(existing?.lead_id ?? initial.lead_id ?? "");
+  const [caseId, setCaseId] = useState(
+    existing?.case_id ?? initial.case_id ?? "",
+  );
+  const [leadId, setLeadId] = useState(
+    existing?.lead_id ?? initial.lead_id ?? "",
+  );
   const [meeting, setMeeting] = useState(existing?.meeting_url ?? "");
   const [required, setRequired] = useState(existing?.payment_required ?? false);
   const [status, setStatus] = useState(existing?.status ?? "pendente");
@@ -140,28 +149,33 @@ export function AppointmentForm({
               />
             </label>
           </div>
-          <label>
-            Caso vinculado
-            <select value={caseId} onChange={(e) => setCaseId(e.target.value)}>
-              <option value="">Sem caso</option>
-              {cases.map((k) => (
-                <option key={k.id} value={k.id}>
-                  {k.title}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Atendimento vinculado
-            <select value={leadId} onChange={(e) => setLeadId(e.target.value)}>
-              <option value="">Sem atendimento</option>
-              {leads.map((lead) => (
-                <option key={lead.id} value={lead.id}>
-                  {lead.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <SearchableCombobox
+            label="Caso vinculado"
+            value={caseId}
+            options={caseOptions(cases, clients)}
+            onChange={(next) => {
+              setCaseId(next);
+              const k = cases.find((k) => k.id === next);
+              if (k?.source_lead_id) setLeadId(k.source_lead_id);
+              else if (next) setLeadId("");
+            }}
+            emptyLabel="Sem caso"
+          />
+          <SearchableCombobox
+            label="Atendimento vinculado"
+            value={leadId}
+            options={leadOptions(
+              leads.filter(
+                (l) =>
+                  !caseId ||
+                  l.id === cases.find((k) => k.id === caseId)?.source_lead_id ||
+                  l.converted_client_id ===
+                    cases.find((k) => k.id === caseId)?.client_id,
+              ),
+            )}
+            onChange={setLeadId}
+            emptyLabel="Sem atendimento"
+          />
           <label>
             Link de reunião (HTTPS, opcional)
             <input

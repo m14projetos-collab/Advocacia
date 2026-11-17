@@ -1,11 +1,11 @@
-# Implantação única e ordenada — M14 Advocacia, Fases 1–5
+# Implantação única e ordenada — M14 Advocacia, Fases 1–6
 
 Alvo: Supabase `neotdgoftxkfaljpmddk`, repositório `m14projetos-collab/Advocacia`, portal `https://advocacia-v3xu.vercel.app`. Este checklist substitui o encadeamento de instruções soltas; os documentos anteriores são referências de cada fase.
 
 ## 1. Conferir estado antes de modificar produção
 
-- [ ] Revisar [auditoria e evidências](fase5-auditoria.md), PR da Fase 5 e backup do projeto.
-- [ ] Conferir se o schema hospedado coincide com as revisões. A auditoria encontrou Fases 1–3, mas não as RPCs Fase 4 e nenhuma Edge Function na listagem. Não pressupor implantação completa só pelo frontend.
+- [ ] Revisar [auditoria e evidências da Fase 6](fase6-auditoria.md), PR de refinamento (Fase 6) e backup do projeto.
+- [ ] Conferir se o schema hospedado coincide com as revisões. A auditoria encontrou Fases 1–3, mas não as RPCs Fase 4 e nenhuma Edge Function na listagem. A nova consulta de 17/11/2026 também não encontrou as RPCs Fases 5–6; merge de frontend não aplica SQL. Não pressupor implantação completa só pelo frontend.
 - [ ] Identificar drift e cobranças duplicadas por `appointment_id` antes dos índices da Fase 4. Não apagar cadastros nem histórico para contornar constraints.
 - [ ] Confirmar admin ativo e políticas Auth: senha mínima 8+, e-mail de reautenticação e proteção de senha vazada quando disponível no plano.
 
@@ -18,9 +18,11 @@ Em instalação nova, usar SQL Editor como `postgres`:
 3. `supabase/review/phase3-crm.sql`.
 4. `supabase/review/phase4-agenda-finance.sql`.
 5. `supabase/review/phase5-whatsapp-ai.sql`.
+6. `supabase/review/phase6-refinement-and-legal-hub.sql`.
 
-- [ ] Se Fases 1–3 já estiverem aplicadas e conferidas, aplicar somente Fases 4 → 5 (e reaplicar Fase 2 apenas se o wrapper público corrigido estiver ausente).
+- [ ] Se Fases 1–3 já estiverem aplicadas e conferidas, aplicar somente Fases 4 → 5 → 6 (e reaplicar Fase 2 apenas se o wrapper público corrigido estiver ausente).
 - [ ] Nunca reaplicar Fase 1 isoladamente depois das outras: ela redefine permissões operacionais. Estes arquivos são revisões SQL, não migrations descobertas por `db push`.
+- [ ] Se reaplicar a Fase 4 ou 5 por correção, reaplicar a Fase 6 depois: ela reforça as RPCs de agenda e contexto. Preservar a ordem evita restaurar definições antigas.
 - [ ] Manter `m14_private` fora da Data API. Expor somente `public` e os endpoints/RPCs com ACL apropriada.
 - [ ] Confirmar bucket `case-files` com `public=false`, limite 20 MB e MIME PDF/TXT/JPEG/PNG. A política restritiva nega acesso direto de `anon`/`authenticated`, inclusive diante de permissões globais permissivas. Não conceder SELECT/INSERT de objetos desse bucket ao navegador.
 - [ ] Conferir RLS e permissões com contas anon, inativa, staff e admin. Novas RPCs são somente `service_role`; escrita do navegador em agenda, pagamentos, mensagens, configurações e documentos deve continuar negada.
@@ -40,6 +42,15 @@ Usar o Dashboard/gerenciador de segredos. Não colar valores no chat nem criar `
 - [ ] IA: `LEGAL_AI_ENABLED=false`, `AI_GATEWAY_API_KEY`, `LEGAL_AI_MODEL` com ID `provider/model` disponível na conta. Conferir suporte a PDF/imagens, região, retenção, subprocessadores e base legal antes de autorizar contexto sensível. Não reutilizar `LLM_API_KEY` genérica sem contrato compatível.
 - [ ] DataJud: `DATAJUD_API_KEY` atual publicada pelo CNJ, somente no backend. API não fornece autos protegidos.
 
+### E-mail transacional e triagem (Fase 6)
+
+- [ ] Configurar `EMAIL_ENABLED=false`, `EMAIL_PROVIDER=resend` ou `smtp` e `EMAIL_FROM` como endereço puro verificado. Resend exige domínio/remetente verificado e `RESEND_API_KEY`. SMTP usa `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD` e TLS direto na porta 465; conferir disponibilidade no provedor e no runtime. As portas 25/587 não são usadas.
+- [ ] Configurar `EMAIL_INBOUND_ENABLED=false`, `EMAIL_INBOUND_PROVIDER=resend` ou `relay` e `EMAIL_INBOUND_TO` com a caixa autorizada. Recebimento e envio são capacidades distintas; a API de envio não fornece uma caixa de entrada histórica.
+- [ ] Resend Receiving: apontar MX/encaminhamento do endereço de entrada e assinar evento `email.received` em `https://neotdgoftxkfaljpmddk.supabase.co/functions/v1/email-inbound-webhook`. Salvar `RESEND_WEBHOOK_SECRET` Svix (`whsec_...`) e API key com acesso à consulta do e-mail recebido. O handler valida assinatura/corpo bruto, timestamp ±5min, busca corpo na API fixa e confere o destino. Anexos não são baixados automaticamente.
+- [ ] Alternativa para caixa SMTP/provedor existente: configurar encaminhamento para relay próprio que envie JSON `{id, email:{from,to:["caixa autorizada"],subject,text}}`, com `x-email-timestamp` em segundos e `x-email-signature: sha256=<hex HMAC SHA256(timestamp + '.' + corpo bruto)>`, usando `EMAIL_RELAY_SECRET` de 32+ caracteres. O handler não confia em endereço do remetente como autenticação. Não é um cliente IMAP/webmail.
+- [ ] Só habilitar `EMAIL_TRIAGE_AI_ENABLED` após avaliar o tratamento de correspondência pelo provedor IA; também exige `LEGAL_AI_ENABLED`, chave e modelo. Sem autorização/configuração ou em falha de modelo, a entrada é preservada com `classification_method=rules`, visível na interface. Confirmar sugestões manualmente; nunca inferir prazo processual apenas do texto do e-mail.
+- [ ] Habilitar entrada e envio separadamente após testar com contatos de teste autorizados. Envios exigem prévia do conteúdo/destinatário, token de versão e revisão. Timeout fica incerto sem reenvio automático. Conferir o provedor antes de criar outra tentativa.
+
 ## 4. Publicar todas as Edge Functions e verificar autenticação
 
 Após autenticar o CLI e conferir o projeto:
@@ -56,6 +67,12 @@ supabase functions deploy whatsapp-evolution-relay --project-ref neotdgoftxkfalj
 supabase functions deploy case-files --project-ref neotdgoftxkfaljpmddk
 supabase functions deploy datajud-lookup --project-ref neotdgoftxkfaljpmddk
 supabase functions deploy legal-agent --project-ref neotdgoftxkfaljpmddk
+supabase functions deploy product-hub --project-ref neotdgoftxkfaljpmddk
+supabase functions deploy initial-kit --project-ref neotdgoftxkfaljpmddk
+supabase functions deploy email-send --project-ref neotdgoftxkfaljpmddk
+supabase functions deploy email-inbound-webhook --project-ref neotdgoftxkfaljpmddk
+supabase functions deploy sync-legal-updates --project-ref neotdgoftxkfaljpmddk
+supabase functions deploy legal-copilot --project-ref neotdgoftxkfaljpmddk
 ```
 
 - [ ] `verify_jwt=false` é deliberado: rotas humanas verificam Bearer por `getUser` e profile ativo antes de usar serviço. Configuração do agente exige admin também no SQL. Não retirar essas verificações.
@@ -86,9 +103,16 @@ Em ambos: atendimento individual, sem grupos/broadcast; texto livre somente nas 
 - [ ] Habilitar `LEGAL_AI_ENABLED` e testar com dados sintéticos. Confirmar que nenhum texto é enviado automaticamente, e que prospect recebe somente rascunho administrativo.
 - [ ] Testar resumo/pauta com caso, geração de documento até 5 MB e aprovação humana explícita antes de salvar resumo ou levar resposta ao compositor. A conversa exige nova revisão de destinatário/sigilo antes do envio.
 
+### Base jurídica e copiloto (Fase 6)
+
+- [ ] Como admin, abrir `/crm/copiloto` e usar **Atualizar Base Jurídica**. Não há sincronização automática anunciada. A atualização consulta 13 páginas oficiais fixas, com limite de tamanho/tempo, preserva extratos datados e apresenta falhas por fonte. Cadastros de área e jurisdição são separados do resultado de consulta; não há endpoint de URL arbitrária.
+- [ ] Conferir CNJ, STJ, STF, TJSP, TJRJ, TJMG, Planalto e OAB. Bloqueios HTTP/WAF ou mudança de endereço exigem revisão do catálogo de código/SQL; não substituir por blogs nem considerar consulta malsucedida como atualização válida. Trecho de portal/notícia não equivale a texto integral de decisão ou garantia de vigência.
+- [ ] DataJud: a fonte geral acompanha a documentação oficial. Ao selecionar um caso na atualização, o backend também tenta a consulta pública específica com a mesma verificação de sigilo/CNJ da Fase 5; não usa DataJud como repositório de jurisprudência.
+- [ ] Conferir configuração de tom em `/crm/agente`. O copiloto pesquisa fontes por área/jurisdição, aceita somente trechos literais validados e devolve links/datas reais do banco. Sem evidência, deve informar a lacuna; resumos/pautas/rascunhos no tom do Matheus continuam no Hub com revisão humana. Não há envio automático de resultados.
+
 ## 7. Publicar frontend Vercel
 
-- [ ] Revisar/mergear o PR da Fase 5 somente após o backend e as políticas estarem prontos para uso.
+- [ ] Revisar/mergear o PR de refinamento (Fase 6) somente após o backend e as políticas estarem prontos para uso.
 - [ ] `VITE_SUPABASE_URL=https://neotdgoftxkfaljpmddk.supabase.co`, `VITE_SUPABASE_PUBLISHABLE_KEY` pública e identidade profissional real (`VITE_OFFICE_OAB_NUMBER`).
 - [ ] `VITE_TURNSTILE_SITE_KEY` pública; `VITE_INTAKE_ENABLED=false` até o aceite do intake. Ausência de site key/flag mantém o contato por WhatsApp.
 - [ ] Build `npm run build`, output `dist`, rewrite SPA existente. Não há chaves de WhatsApp/IA/DataJud/InfinitePay no bundle.
@@ -106,3 +130,13 @@ Em ambos: atendimento individual, sem grupos/broadcast; texto livre somente nas 
 - [ ] Desktop/mobile, navegação sem href vazio ou âncora inexistente, console sem erros no fluxo normal e sem dependência de fontes/imagens externas.
 - [ ] Repetir concorrência real em homologação (conversão, agenda, cobrança e mensagens) e revisar os advisors. PGlite é local e serializado.
 - [ ] Habilitar intake/financeiro/WhatsApp/IA separadamente após seus respectivos aceites. Manter logs operacionais sem tokens, payloads brutos ou conteúdo jurídico copiado para auditoria.
+
+### Aceite adicional de produto (Fase 6)
+
+- [ ] `/crm` abre **Hoje no Escritório**, `/crm/funil` preserva Kanban. Conferir prazos de hoje até D+5 (dias de calendário da visão, não contagem CPC), reuniões do dia em São Paulo, cobranças pendentes/vencidas e SLA operacional de 24h. O SLA não é prazo processual.
+- [ ] Abrir seletores pela seta, selecionar recente em um clique e pesquisar documento formatado, nome com acento, telefone e CNJ; testar teclado e celular. Vínculos dependentes devem ser limpos ao mudar cliente.
+- [ ] Editar perfil próprio e comprovar que e-mail Auth, role e status não são alteráveis pelo formulário/RPC. Completar OAB/UF. Contato/endereço do cliente podem ser corrigidos no resumo da ficha; nome/documento continuam protegidos pela formalização.
+- [ ] Criar agendamento, confirmar criação do link e repetir webhook pago: funil avança sem regressão, duplicação ou reabertura de arquivado. Conversão já fecha o lead; cobrança posterior não o devolve a proposta. Contato só conta após mensagem humana enviada, ligação atendida ou e-mail enviado.
+- [ ] Gerar Procuração, Contrato e Declaração com dados reais conferidos, editar cláusulas necessárias, salvar versão revisada, imprimir/PDF. Nenhuma hipossuficiência é presumida, poder especial não é conferido automaticamente e o modelo não dispensa análise da tabela OAB e do ajuste individual.
+- [ ] Conferir prévia de e-mail, alteração concorrente, resposta incerta e idempotência; e-mail recebido só entra no caso após revisão e aparece na própria ficha. Prioridade IA é auxiliar; confirmar publicação, ciência e termo inicial antes de cadastrar prazo.
+- [ ] Rodar os testes locais e repetir aceite hospedado com contas de teste: `npm install && npm run build`, `npm test`, `npm run test:browser`, `deno check supabase/functions/*/index.ts`. São 17 funções no total. Provedores simulados e PGlite não substituem concorrência, SMTP/MX, Auth/Storage e compra autorizada de aceite hospedado.
