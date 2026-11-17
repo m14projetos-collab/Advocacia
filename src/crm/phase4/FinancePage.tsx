@@ -1,3 +1,5 @@
+import { SearchableCombobox } from "../components/SearchableCombobox";
+import { clientOptions, caseOptions } from "../phase6/options";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { Case, Client, Lead, message } from "../types";
@@ -35,9 +37,15 @@ export function FinancePage({
   const [notice, setNotice] = useState("");
   const [id, setId] = useState(() => crypto.randomUUID());
   const initial = contextFromUrl();
-  const [client, setClient] = useState(initial.client_id ?? cases.find(k=>k.id===initial.case_id)?.client_id ?? "");
+  const [client, setClient] = useState(
+    initial.client_id ??
+      cases.find((k) => k.id === initial.case_id)?.client_id ??
+      "",
+  );
   const [caseId, setCaseId] = useState(initial.case_id ?? "");
-  const [appointment, setAppointment] = useState(new URLSearchParams(window.location.search).get("appointment_id") ?? "");
+  const [appointment, setAppointment] = useState(
+    new URLSearchParams(window.location.search).get("appointment_id") ?? "",
+  );
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [fee, setFee] = useState("consulta");
@@ -102,15 +110,30 @@ export function FinancePage({
     return () => controller.current?.abort();
   }, [load]);
   const prefilled = useRef(false);
-  useEffect(()=>{
-    const requested=new URLSearchParams(window.location.search).get('appointment_id');
-    if(loading||!requested||prefilled.current)return;
-    prefilled.current=true;
-    const slot=appointments.find(a=>a.id===requested);
-    if(slot){setCaseId(slot.case_id??'');setClient(slot.case_id?cases.find(k=>k.id===slot.case_id)?.client_id??'':leads.find(l=>l.id===slot.lead_id)?.converted_client_id??'');setAppointment(slot.id);}
-    else{setAppointment('');setNotice('Consulta não disponível para nova cobrança pendente. Confira os pagamentos já vinculados.');}
-  },[loading,appointments,cases,leads]);
-  const visible = client ? items.filter(p=>p.client_id===client) : items;
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get(
+      "appointment_id",
+    );
+    if (loading || !requested || prefilled.current) return;
+    prefilled.current = true;
+    const slot = appointments.find((a) => a.id === requested);
+    if (slot) {
+      setCaseId(slot.case_id ?? "");
+      setClient(
+        slot.case_id
+          ? (cases.find((k) => k.id === slot.case_id)?.client_id ?? "")
+          : (leads.find((l) => l.id === slot.lead_id)?.converted_client_id ??
+              ""),
+      );
+      setAppointment(slot.id);
+    } else {
+      setAppointment("");
+      setNotice(
+        "Consulta não disponível para nova cobrança pendente. Confira os pagamentos já vinculados.",
+      );
+    }
+  }, [loading, appointments, cases, leads]);
+  const visible = client ? items.filter((p) => p.client_id === client) : items;
   const relevantAppointments = appointments.filter((a) =>
     a.case_id
       ? cases.find((k) => k.id === a.case_id)?.client_id === client
@@ -221,68 +244,58 @@ export function FinancePage({
           pendentes
         </span>
       </div>
-      <details className="crm-editor" open={Boolean(initial.client_id || initial.case_id || new URLSearchParams(window.location.search).get("appointment_id"))}>
+      <details
+        className="crm-editor"
+        open={Boolean(
+          initial.client_id ||
+          initial.case_id ||
+          new URLSearchParams(window.location.search).get("appointment_id"),
+        )}
+      >
         <summary>Nova cobrança InfinitePay</summary>
         <form className="crm-stack" onSubmit={create}>
           <fieldset disabled={busy} className="crm-stack">
-            <label>
-              Cliente da cobrança
-              <select
-                required
-                value={client}
-                onChange={(e) => {
-                  setClient(e.target.value);
-                  setCaseId("");
-                  setAppointment("");
-                }}
-              >
-                <option value="">Selecione o cliente</option>
-                {clients.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.full_name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Caso da cobrança
-              <select
-                value={caseId}
-                onChange={(e) => {
-                  setCaseId(e.target.value);
-                  setAppointment("");
-                }}
-              >
-                <option value="">Sem caso</option>
-                {cases
-                  .filter((k) => k.client_id === client)
-                  .map((k) => (
-                    <option key={k.id} value={k.id}>
-                      {k.title}
-                    </option>
-                  ))}
-              </select>
-            </label>
-            <label>
-              Consulta vinculada
-              <select
-                value={appointment}
-                onChange={(e) => {
-                  setAppointment(e.target.value);
-                  const a = appointments.find(
-                    (item) => item.id === e.target.value,
-                  );
-                  if (a) setCaseId(a.case_id ?? "");
-                }}
-              >
-                <option value="">Sem consulta</option>
-                {relevantAppointments.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.title} · {officeInput(a.starts_at).replace("T", " ")}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <SearchableCombobox
+              label="Cliente da cobrança"
+              required
+              value={client}
+              options={clientOptions(clients)}
+              onChange={(value) => {
+                setClient(value);
+                setCaseId("");
+                setAppointment("");
+              }}
+              emptyLabel="Selecione o cliente"
+            />
+            <SearchableCombobox
+              label="Caso da cobrança"
+              value={caseId}
+              options={caseOptions(
+                cases.filter((k) => k.client_id === client),
+                clients,
+              )}
+              onChange={(value) => {
+                setCaseId(value);
+                setAppointment("");
+              }}
+              emptyLabel="Sem caso"
+            />
+            <SearchableCombobox
+              label="Consulta vinculada"
+              value={appointment}
+              options={relevantAppointments.map((a) => ({
+                value: a.id,
+                label: a.title,
+                description: officeInput(a.starts_at).replace("T", " "),
+                recent: a.starts_at,
+              }))}
+              onChange={(value) => {
+                setAppointment(value);
+                const a = appointments.find((a) => a.id === value);
+                if (a) setCaseId(a.case_id ?? "");
+              }}
+              emptyLabel="Sem consulta"
+            />
             <label>
               Descrição interna
               <input
@@ -367,7 +380,16 @@ export function FinancePage({
                   <td>
                     {clients.find((c) => c.id === p.client_id)?.full_name ??
                       "Cliente vinculado"}
-                    <p><a href={contextLink("/crm/hub", {client_id:p.client_id,...(p.case_id?{case_id:p.case_id}:{})})}>{p.description} · abrir ficha →</a></p>
+                    <p>
+                      <a
+                        href={contextLink("/crm/hub", {
+                          client_id: p.client_id,
+                          ...(p.case_id ? { case_id: p.case_id } : {}),
+                        })}
+                      >
+                        {p.description} · abrir ficha →
+                      </a>
+                    </p>
                     <small>{p.order_nsu}</small>
                   </td>
                   <td>

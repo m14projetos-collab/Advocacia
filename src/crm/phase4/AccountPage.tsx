@@ -1,3 +1,5 @@
+import { invoke } from "./api";
+import { normalizePhoneToE164 } from "../../lib/phone";
 import { FormEvent, useEffect, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { message } from "../types";
@@ -8,6 +10,8 @@ interface Profile {
   oab_number: string | null;
   phone: string | null;
   bio: string | null;
+  oab_uf: string | null;
+  updated_at: string;
 }
 export function AccountPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -32,7 +36,9 @@ export function AccountPage() {
           throw new Error("Entre novamente para visualizar sua conta.");
         const { data, error: profileError } = await supabase!
           .from("profiles")
-          .select("full_name,role,is_active,oab_number,phone,bio")
+          .select(
+            "full_name,role,is_active,oab_number,oab_uf,phone,bio,updated_at",
+          )
           .eq("id", user.id)
           .single();
         if (profileError) throw profileError;
@@ -50,6 +56,35 @@ export function AccountPage() {
       alive = false;
     };
   }, []);
+  async function saveProfile(event: FormEvent) {
+    event.preventDefault();
+    if (!profile) return;
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      const phone = profile.phone ? normalizePhoneToE164(profile.phone) : "";
+      if (profile.phone && !phone)
+        throw new Error("Telefone inválido. Inclua DDD.");
+      const saved = await invoke<Profile>("product-hub", {
+        operation: "profile_save",
+        profile: {
+          full_name: profile.full_name,
+          oab_number: profile.oab_number ?? "",
+          oab_uf: profile.oab_uf ?? "",
+          phone,
+          bio: profile.bio ?? "",
+          expected_updated_at: profile.updated_at,
+        },
+      });
+      setProfile(saved);
+      setNotice("Perfil profissional atualizado com sucesso.");
+    } catch (err) {
+      setError(message(err));
+    } finally {
+      setBusy(false);
+    }
+  }
   async function change(event: FormEvent) {
     event.preventDefault();
     setError("");
@@ -130,11 +165,84 @@ export function AccountPage() {
             <dt>Acesso</dt>
             <dd>{profile.is_active ? "Ativo" : "Inativo"}</dd>
             <dt>OAB</dt>
-            <dd>{profile.oab_number || "Não informada"}</dd>
+            <dd>
+              {[profile.oab_number, profile.oab_uf]
+                .filter(Boolean)
+                .join(" / ") || "Não informada"}
+            </dd>
             <dt>Telefone</dt>
             <dd>{profile.phone || "Não informado"}</dd>
           </dl>
-          {profile.bio && <p>{profile.bio}</p>}
+          <form onSubmit={saveProfile} className="crm-stack">
+            <h3>Editar meu perfil profissional</h3>
+            <fieldset disabled={busy} className="crm-stack">
+              <label>
+                Nome completo
+                <input
+                  required
+                  minLength={2}
+                  maxLength={160}
+                  value={profile.full_name}
+                  onChange={(e) =>
+                    setProfile({ ...profile, full_name: e.target.value })
+                  }
+                />
+              </label>
+              <div className="crm-grid-2">
+                <label>
+                  Número OAB
+                  <input
+                    maxLength={30}
+                    value={profile.oab_number ?? ""}
+                    onChange={(e) =>
+                      setProfile({ ...profile, oab_number: e.target.value })
+                    }
+                  />
+                </label>
+                <label>
+                  UF da OAB
+                  <select
+                    value={profile.oab_uf ?? ""}
+                    onChange={(e) =>
+                      setProfile({ ...profile, oab_uf: e.target.value })
+                    }
+                  >
+                    <option value="">Não informada</option>
+                    {"AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO"
+                      .split(" ")
+                      .map((uf) => (
+                        <option key={uf}>{uf}</option>
+                      ))}
+                  </select>
+                </label>
+              </div>
+              <label>
+                Telefone / WhatsApp profissional
+                <input
+                  type="tel"
+                  maxLength={25}
+                  value={profile.phone ?? ""}
+                  onChange={(e) =>
+                    setProfile({ ...profile, phone: e.target.value })
+                  }
+                />
+              </label>
+              <label>
+                Bio profissional
+                <textarea
+                  maxLength={3000}
+                  rows={4}
+                  value={profile.bio ?? ""}
+                  onChange={(e) =>
+                    setProfile({ ...profile, bio: e.target.value })
+                  }
+                />
+              </label>
+              <button className="crm-primary">
+                Salvar perfil profissional
+              </button>
+            </fieldset>
+          </form>
         </>
       )}
       <form onSubmit={change} className="crm-stack" noValidate>

@@ -28,3 +28,16 @@ verify_jwt = false
 verify_jwt = false
 [functions.legal-agent]
 verify_jwt = false
+
+[functions.product-hub]
+verify_jwt = false
+[functions.initial-kit]
+verify_jwt = false
+[functions.email-send]
+verify_jwt = false
+[functions.email-inbound-webhook]
+verify_jwt = false
+[functions.sync-legal-updates]
+verify_jwt = false
+[functions.legal-copilot]
+verify_jwt = false

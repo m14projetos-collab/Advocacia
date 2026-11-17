@@ -71,20 +71,14 @@ export async function external(
   init: RequestInit = {},
   timeout = 15000,
 ) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeout);
-  try {
-    const r = await fetch(url, {
-      ...init,
-      redirect: "error",
-      signal: controller.signal,
-    });
-    if (!r.ok)
-      throw new HttpError(502, "Provedor indisponível ou requisição recusada.");
-    return r;
-  } finally {
-    clearTimeout(timer);
-  }
+  const r = await fetch(url, {
+    ...init,
+    redirect: "error",
+    signal: AbortSignal.timeout(timeout),
+  });
+  if (!r.ok)
+    throw new HttpError(502, "Provedor indisponível ou requisição recusada.");
+  return r;
 }
 export function enabled(name: string) {
   if (Deno.env.get(name) !== "true")

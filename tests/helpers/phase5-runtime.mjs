@@ -20,6 +20,7 @@ export function runtime(endpoint, options = {}) {
     fetch: [],
     upload: [],
     signed: [],
+    smtp: [],
     model: [],
     queries: [],
   };
@@ -96,6 +97,8 @@ export function runtime(endpoint, options = {}) {
                 ? options.inactive
                   ? null
                   : { id: actor, role: options.role ?? "staff" }
+                : table === "email_triage"
+                  ? (options.existingEmail??null)
                 : table === "case_documents"
                   ? doc
                   : null,
@@ -136,6 +139,7 @@ export function runtime(endpoint, options = {}) {
     },
     async rpc(name, args) {
       calls.rpc.push({ name, args });
+      if(options.rpc){const override=await options.rpc(name,args);if(override!==undefined)return override;}
       let result = { ok: true };
       if (name === "office_phase5_action") {
         if (args.p_action === "snapshot") result = snapshot;
@@ -200,6 +204,7 @@ export function runtime(endpoint, options = {}) {
     TextEncoder,
     TextDecoder,
     Uint8Array,
+    btoa,atob,Intl,ReadableStream,WritableStream,
     AbortController,
     AbortSignal,
     crypto: webcrypto,
@@ -208,12 +213,14 @@ export function runtime(endpoint, options = {}) {
     console,
     Deno: {
       env: { get: (key) => env[key] },
+      connectTls: options.connectTls,
       serve: (fn) => {
         handler = fn;
       },
     },
     fetch: async (url, init = {}) => {
       calls.fetch.push({ url, init });
+      if(options.fetch)return options.fetch(url,init);
       if (options.fetchThrows) throw new Error("provider unavailable");
       if (url.includes("graph.facebook.com"))
         return Response.json({ messages: [{ id: "wamid.confirmed" }] });
@@ -250,7 +257,7 @@ export function runtime(endpoint, options = {}) {
           (model) => ({ model, apiKey }),
         generateText: async (args) => {
           calls.model.push(args);
-          return { text: "Fatos disponíveis e lacunas para revisão humana." };
+          return { text: options.aiText??"Fatos disponíveis e lacunas para revisão humana." };
         },
       };
     const full = path.resolve(filename);

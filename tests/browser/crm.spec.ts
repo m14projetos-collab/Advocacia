@@ -23,6 +23,7 @@ test('login ativo, Kanban, consultas BrasilAPI, revisão e conversão', async ({
   await page.route('https://brasilapi.com.br/api/cep/v2/11010000', route => route.fulfill({ json: { cep: '11010000', street: 'Rua de Teste', neighborhood: 'Centro', city: 'Santos', state: 'SP' } }));
   await page.route('https://brasilapi.com.br/api/cnpj/v1/62575046000196', route => route.fulfill({ json: { razao_social: 'Empresa Teste', municipio: 'Santos', uf: 'SP', cep: '11010000' } }));
   await login(page);
+  await page.getByRole('link',{name:/Funil de atendimento/}).click();
   await expect(page.getByRole('heading', { name: 'Funil de atendimento' })).toBeVisible();
   for (const name of ['Novos','Em triagem','Reunião agendada','Proposta','Fechados','Arquivados']) await expect(page.getByRole('heading', { name, exact: true })).toBeVisible();
   await page.getByLabel('Etapa de Maria Teste').selectOption('triagem');
@@ -61,6 +62,7 @@ test('login ativo, Kanban, consultas BrasilAPI, revisão e conversão', async ({
 test('CRM em tela pequena mantém navegação e diálogo utilizáveis', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await api(page); await login(page);
+  await page.getByRole('link',{name:/Funil de atendimento/}).click();
   await expect(page.getByRole('heading', { name: 'Funil de atendimento' })).toBeVisible();
   await page.getByRole('button', { name: 'Formalizar cliente / caso' }).click();
   await expect(page.getByRole('dialog')).toBeVisible();
@@ -73,6 +75,7 @@ test('coincidência de interesse bloqueia o botão de conversão', async ({ page
   const calls = await api(page);
   await page.route('https://crm-test.supabase.co/rest/v1/rpc/review_lead_conversion', route => route.fulfill({ json: { token: 'conflict-test', conflicts: [{ case_id: 'case-test', full_name: 'Maria Teste', party_role: 'adversa', match_by: 'nome' }] } }));
   await login(page);
+  await page.getByRole('link',{name:/Funil de atendimento/}).click();
   await page.getByRole('button', { name: 'Formalizar cliente / caso' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('Documento', { exact: true }).fill('52998224725');
@@ -100,6 +103,7 @@ test('falha da BrasilAPI permite preenchimento manual e preserva o formulário',
   await api(page);
   await page.route('https://brasilapi.com.br/**', route => route.fulfill({ status: 503, json: {} }));
   await login(page);
+  await page.getByRole('link',{name:/Funil de atendimento/}).click();
   await page.getByRole('button', { name: 'Formalizar cliente / caso' }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByLabel('CEP', { exact: true }).fill('11010000');

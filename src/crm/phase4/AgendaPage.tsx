@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase";
-import { Case, Lead, message } from "../types";
+import { Case, Client, Lead, message } from "../types";
 import { contextLink } from "../phase5/types";
 import { AppointmentForm } from "./AppointmentForm";
 import { DeadlineCalculator } from "./DeadlineCalculator";
@@ -23,7 +23,15 @@ interface Editor {
   type?: Appointment["type"];
   existing?: Appointment;
 }
-export function AgendaPage({ leads, cases }: { leads: Lead[]; cases: Case[] }) {
+export function AgendaPage({
+  leads,
+  cases,
+  clients = [],
+}: {
+  leads: Lead[];
+  cases: Case[];
+  clients?: Client[];
+}) {
   const today = officeDate();
   const [month, setMonth] = useState(today.slice(0, 7));
   const [day, setDay] = useState(today);
@@ -70,17 +78,33 @@ export function AgendaPage({ leads, cases }: { leads: Lead[]; cases: Case[] }) {
     return () => controller.current?.abort();
   }, [load]);
   useEffect(() => {
-    const requested = new URLSearchParams(window.location.search).get('appointment_id');
+    const requested = new URLSearchParams(window.location.search).get(
+      "appointment_id",
+    );
     if (!requested || !/^[0-9a-f-]{36}$/i.test(requested)) return;
     let alive = true;
     void (async () => {
-      const {data,error:requestError}=await supabase!.from('appointments').select('id,title,type,starts_at,ends_at,lead_id,case_id,meeting_url,payment_required,status,updated_at').eq('id',requested).single();
-      if(!alive)return;
-      if(requestError||!data){setError('Compromisso não encontrado ou sem acesso.');return;}
-      const appointment=data as Appointment,date=officeDate(appointment.starts_at);
-      setMonth(date.slice(0,7));setDay(date);setEditor({id:appointment.id,date,existing:appointment});
+      const { data, error: requestError } = await supabase!
+        .from("appointments")
+        .select(
+          "id,title,type,starts_at,ends_at,lead_id,case_id,meeting_url,payment_required,status,updated_at",
+        )
+        .eq("id", requested)
+        .single();
+      if (!alive) return;
+      if (requestError || !data) {
+        setError("Compromisso não encontrado ou sem acesso.");
+        return;
+      }
+      const appointment = data as Appointment,
+        date = officeDate(appointment.starts_at);
+      setMonth(date.slice(0, 7));
+      setDay(date);
+      setEditor({ id: appointment.id, date, existing: appointment });
     })();
-    return()=>{alive=false;};
+    return () => {
+      alive = false;
+    };
   }, []);
   const onDay = (date: string) => {
     const bounds = dayBounds(date);
@@ -216,19 +240,51 @@ export function AgendaPage({ leads, cases }: { leads: Lead[]; cases: Case[] }) {
                   )}
                 </div>
                 <div className="crm-actions">
-                {(a.case_id || a.lead_id) && <a href={contextLink('/crm/hub', {...(a.case_id?{case_id:a.case_id}:{}),...(a.lead_id?{lead_id:a.lead_id}:{})})}>Abrir ficha e histórico →</a>}
-                {a.payment_required && a.status==='pendente' && (a.case_id?cases.find(k=>k.id===a.case_id)?.client_id:leads.find(l=>l.id===a.lead_id)?.converted_client_id) && <a href={contextLink('/crm/financeiro', {...(a.case_id?{case_id:a.case_id}:{}),...(a.lead_id?{lead_id:a.lead_id}:{}),client_id:(a.case_id?cases.find(k=>k.id===a.case_id)?.client_id:leads.find(l=>l.id===a.lead_id)?.converted_client_id)!}, {appointment_id:a.id})}>Cobrar consulta →</a>}
-                <button
-                  onClick={() =>
-                    setEditor({
-                      id: a.id,
-                      date: officeDate(a.starts_at),
-                      existing: a,
-                    })
-                  }
-                >
-                  Editar compromisso
-                </button></div>
+                  {(a.case_id || a.lead_id) && (
+                    <a
+                      href={contextLink("/crm/hub", {
+                        ...(a.case_id ? { case_id: a.case_id } : {}),
+                        ...(a.lead_id ? { lead_id: a.lead_id } : {}),
+                      })}
+                    >
+                      Abrir ficha e histórico →
+                    </a>
+                  )}
+                  {a.payment_required &&
+                    a.status === "pendente" &&
+                    (a.case_id
+                      ? cases.find((k) => k.id === a.case_id)?.client_id
+                      : leads.find((l) => l.id === a.lead_id)
+                          ?.converted_client_id) && (
+                      <a
+                        href={contextLink(
+                          "/crm/financeiro",
+                          {
+                            ...(a.case_id ? { case_id: a.case_id } : {}),
+                            ...(a.lead_id ? { lead_id: a.lead_id } : {}),
+                            client_id: (a.case_id
+                              ? cases.find((k) => k.id === a.case_id)?.client_id
+                              : leads.find((l) => l.id === a.lead_id)
+                                  ?.converted_client_id)!,
+                          },
+                          { appointment_id: a.id },
+                        )}
+                      >
+                        Cobrar consulta →
+                      </a>
+                    )}
+                  <button
+                    onClick={() =>
+                      setEditor({
+                        id: a.id,
+                        date: officeDate(a.starts_at),
+                        existing: a,
+                      })
+                    }
+                  >
+                    Editar compromisso
+                  </button>
+                </div>
               </article>
             ))}
           </div>
@@ -240,6 +296,7 @@ export function AgendaPage({ leads, cases }: { leads: Lead[]; cases: Case[] }) {
           {...editor}
           leads={leads}
           cases={cases}
+          clients={clients}
           onClose={() => setEditor(null)}
           onSaved={() => {
             setEditor(null);

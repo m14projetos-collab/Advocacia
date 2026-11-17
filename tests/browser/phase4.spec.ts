@@ -259,8 +259,10 @@ test("financeiro cria cobrança com UUID estável, vincula consulta e confere no
   await login(page);
   await page.getByRole("link", { name: /Financeiro/ }).click();
   await page.getByText("Nova cobrança InfinitePay", { exact: true }).click();
-  await page.getByLabel("Cliente da cobrança").selectOption(clientId);
-  await page.getByLabel("Consulta vinculada").selectOption(caseId);
+  await page.getByRole("combobox",{name:"Cliente da cobrança",exact:true}).click();
+  await page.getByRole("option",{name:/Cliente Financeiro/}).click();
+  await page.getByRole("combobox",{name:"Consulta vinculada",exact:true}).click();
+  await page.getByRole("option",{name:/Consulta paga/}).click();
   await page.getByLabel("Descrição interna").fill("Consulta inicial");
   await page.getByLabel("Valor em reais").fill("150,00");
   await page.getByRole("button", { name: "Criar link de pagamento" }).click();

@@ -1,3 +1,8 @@
+import { SummaryPanel } from "../phase6/SummaryPanel";
+import { InitialKitPanel } from "../phase6/InitialKitPanel";
+import { EmailPanel } from "../phase6/EmailPanel";
+import { SearchableCombobox } from "../components/SearchableCombobox";
+import { caseOptions, clientOptions, leadOptions } from "../phase6/options";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Case, Client, Lead, message } from "../types";
 import { invoke } from "../phase4/api";
@@ -12,7 +17,7 @@ function HubCard({ context }: { context: Context }) {
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
     [notice, setNotice] = useState("");
-  const [tab, setTab] = useState("conversation"),
+  const [tab, setTab] = useState("summary"),
     [text, setText] = useState(""),
     [reviewed, setReviewed] = useState(false),
     [sendId, setSendId] = useState(() => crypto.randomUUID());
@@ -282,11 +287,15 @@ function HubCard({ context }: { context: Context }) {
             aria-label="Seções da ficha"
           >
             {[
+              ["summary", "Resumo & Partes / Conflito"],
               ["conversation", "WhatsApp e ligações"],
               ["case", "Caso / DataJud"],
               ["documents", "Documentos privados"],
               ["agent", "Agente IA"],
-              ["activity", "Agenda e financeiro"],
+              ["agenda", "Agenda / Prazos"],
+              ["payments", "Financeiro InfinitePay"],
+              ["email", "E-mail"],
+              ["kit", "Kit Inicial"],
             ].map(([value, label]) => (
               <button
                 key={value}
@@ -300,6 +309,15 @@ function HubCard({ context }: { context: Context }) {
             ))}
           </div>
           <section role="tabpanel" id={`hub-${tab}`}>
+            {tab === "summary" && (
+              <SummaryPanel
+                context={ctx}
+                data={data}
+                onChanged={() => void load()}
+              />
+            )}
+            {tab === "kit" && <InitialKitPanel context={ctx} />}
+            {tab === "email" && <EmailPanel context={ctx} data={data} />}
             {tab === "conversation" && (
               <>
                 <h3>Conversa vinculada ao contato</h3>
@@ -558,63 +576,77 @@ function HubCard({ context }: { context: Context }) {
                 }}
               />
             )}
-            {tab === "activity" && (
+            {tab === "agenda" && (
               <>
                 <h3>Agenda vinculada</h3>
                 {data.appointments.length === 0 && (
                   <p>Nenhum compromisso neste contato.</p>
                 )}
-                {data.appointments.map((a) => (
-                  <article className="crm-hub-box" key={a.id}>
-                    <h4>{a.title}</h4>
-                    <p>
-                      {officeInput(a.starts_at).replace("T", " ")} · {a.status}
-                    </p>
-                    <a
-                      href={contextLink("/crm/agenda", ctx, {
-                        appointment_id: a.id,
-                      })}
-                    >
-                      Abrir compromisso →
-                    </a>
-                    {data.client_id &&
-                      a.payment_required &&
-                      a.status === "pendente" && (
-                        <a
-                          href={contextLink(
-                            "/crm/financeiro",
-                            {
-                              client_id: data.client_id!,
-                              ...(a.case_id ? { case_id: a.case_id } : {}),
-                              ...(a.lead_id ? { lead_id: a.lead_id } : {}),
-                            },
-                            { appointment_id: a.id },
-                          )}
-                        >
-                          Criar cobrança vinculada →
-                        </a>
-                      )}
-                  </article>
-                ))}
+                {data.appointments
+                  .filter(
+                    (a) =>
+                      !data.case_id ||
+                      a.case_id === data.case_id ||
+                      Boolean(data.lead_id && a.lead_id === data.lead_id),
+                  )
+                  .map((a) => (
+                    <article className="crm-hub-box" key={a.id}>
+                      <h4>{a.title}</h4>
+                      <p>
+                        {officeInput(a.starts_at).replace("T", " ")} ·{" "}
+                        {a.status}
+                      </p>
+                      <a
+                        href={contextLink("/crm/agenda", ctx, {
+                          appointment_id: a.id,
+                        })}
+                      >
+                        Abrir compromisso →
+                      </a>
+                      {data.client_id &&
+                        a.payment_required &&
+                        a.status === "pendente" && (
+                          <a
+                            href={contextLink(
+                              "/crm/financeiro",
+                              {
+                                client_id: data.client_id!,
+                                ...(a.case_id ? { case_id: a.case_id } : {}),
+                                ...(a.lead_id ? { lead_id: a.lead_id } : {}),
+                              },
+                              { appointment_id: a.id },
+                            )}
+                          >
+                            Criar cobrança vinculada →
+                          </a>
+                        )}
+                    </article>
+                  ))}
+              </>
+            )}
+            {tab === "payments" && (
+              <>
                 <h3>Cobranças do cliente</h3>
                 {data.payments.length === 0 && (
                   <p>Nenhuma cobrança vinculada.</p>
                 )}
-                {data.payments.map((p) => (
-                  <article className="crm-hub-box" key={p.id}>
-                    <p>
-                      {p.description} ·{" "}
-                      {new Intl.NumberFormat("pt-BR", {
-                        style: "currency",
-                        currency: "BRL",
-                      }).format(p.amount_cents / 100)}{" "}
-                      · {PAYMENT_STATUS[p.status] ?? p.status}
-                    </p>
-                    <a href={contextLink("/crm/financeiro", ctx)}>
-                      Abrir financeiro deste cliente →
-                    </a>
-                  </article>
-                ))}
+                {data.payments
+                  .filter((p) => !data.case_id || p.case_id === data.case_id)
+                  .map((p) => (
+                    <article className="crm-hub-box" key={p.id}>
+                      <p>
+                        {p.description} ·{" "}
+                        {new Intl.NumberFormat("pt-BR", {
+                          style: "currency",
+                          currency: "BRL",
+                        }).format(p.amount_cents / 100)}{" "}
+                        · {PAYMENT_STATUS[p.status] ?? p.status}
+                      </p>
+                      <a href={contextLink("/crm/financeiro", ctx)}>
+                        Abrir financeiro deste cliente →
+                      </a>
+                    </article>
+                  ))}
               </>
             )}
           </section>
@@ -662,35 +694,30 @@ export function HubPage({
   }
   return (
     <div className="crm-hub">
-      <label className="crm-hub-selector">
-        Contato ou caso
-        <select value={value} onChange={(e) => select(e.target.value)}>
-          <option disabled value="">
-            Selecione
-          </option>
-          <optgroup label="Atendimentos">
-            {leads.map((l) => (
-              <option key={l.id} value={"lead:" + l.id}>
-                {l.name} · {l.stage}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label="Clientes">
-            {clients.map((c) => (
-              <option key={c.id} value={"client:" + c.id}>
-                {c.full_name}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label="Casos">
-            {cases.map((k) => (
-              <option key={k.id} value={"case:" + k.id}>
-                {k.title}
-              </option>
-            ))}
-          </optgroup>
-        </select>
-      </label>
+      <SearchableCombobox
+        label="Contato ou caso"
+        required
+        value={value}
+        onChange={select}
+        options={[
+          ...leadOptions(leads).map((o) => ({
+            ...o,
+            value: "lead:" + o.value,
+            description: "Atendimento · " + o.description,
+          })),
+          ...clientOptions(clients).map((o) => ({
+            ...o,
+            value: "client:" + o.value,
+            description: "Cliente · " + (o.description ?? ""),
+          })),
+          ...caseOptions(cases, clients).map((o) => ({
+            ...o,
+            value: "case:" + o.value,
+            description: "Caso · " + (o.description ?? ""),
+          })),
+        ]}
+        emptyLabel="Selecione um cliente, caso ou atendimento"
+      />
       {value ? (
         <HubCard key={JSON.stringify(ctx)} context={ctx} />
       ) : (
