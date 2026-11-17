@@ -1,32 +1,5 @@
-import { expect, test, Page } from '@playwright/test';
-
-const user = { id: '10000000-0000-0000-0000-000000000001', aud: 'authenticated', role: 'authenticated', email: 'equipe@example.test', app_metadata: {}, user_metadata: {}, created_at: '2026-11-16T00:00:00Z' };
-const lead = { id: '20000000-0000-0000-0000-000000000001', name: 'Maria Teste', phone: '+5513999999999', email: null, summary: 'Revisão de contrato de prestação de serviços.', practice_area: 'contratos', stage: 'novo', urgency: 'normal', created_at: '2026-11-16T00:00:00Z', converted_client_id: null };
-
-// Contratos HTTP simulados; a autorização e a transação reais são testadas no PGlite.
-async function api(page: Page, active = true) {
-  const calls: { path: string; method: string; body: unknown }[] = [];
-  await page.route('https://crm-test.supabase.co/**', async route => {
-    const req = route.request(); const url = new URL(req.url());
-    calls.push({ path: url.pathname, method: req.method(), body: req.postDataJSON() });
-    let body: unknown = {};
-    if (url.pathname.endsWith('/token')) body = { access_token: 'test-access-token', refresh_token: 'test-refresh-token', token_type: 'bearer', expires_in: 3600, user };
-    else if (url.pathname.endsWith('/user')) body = user;
-    else if (url.pathname.endsWith('/profiles')) body = active ? { id: user.id, is_active: true } : null;
-    else if (url.pathname.endsWith('/leads_intake')) body = [req.method() === 'PATCH' ? { id: lead.id } : lead];
-    else if (url.pathname.endsWith('/clients') || url.pathname.endsWith('/cases')) body = [];
-    else if (url.pathname.endsWith('/review_lead_conversion')) body = { token: 'review-test', conflicts: [] };
-    else if (url.pathname.endsWith('/convert_lead')) body = { client_id: 'test-client', case_id: 'test-case', already_converted: false };
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
-  });
-  return calls;
-}
-async function login(page: Page) {
-  await page.goto('/crm/login');
-  await page.getByLabel('E-mail profissional').fill('equipe@example.test');
-  await page.getByLabel('Senha', { exact: true }).fill('senha-de-teste');
-  await page.getByRole('button', { name: 'Entrar no CRM' }).click();
-}
+import { expect, test } from '@playwright/test';
+import { api, lead, login } from './fixtures';
 
 test('acesso direto sem sessão mostra login, sem carregar dados internos', async ({ page }) => {
   const calls = await api(page);
@@ -77,9 +50,9 @@ test('login ativo, Kanban, consultas BrasilAPI, revisão e conversão', async ({
   await expect(page.getByRole('status').filter({ hasText: 'Atendimento convertido.' })).toBeVisible();
   expect(calls.find(call => call.path.endsWith('/convert_lead'))?.body).toMatchObject({ p_review_token: 'review-test', p_document_type: 'cnpj', p_title: 'Revisão contratual' });
   await page.getByRole('link', { name: /Agenda/ }).click();
-  await expect(page.getByRole('heading', { name: 'Compromissos, consultas e prazos' })).toBeVisible();
+  await expect(page.getByLabel('Mês da agenda')).toBeVisible();
   await page.getByRole('link', { name: /Financeiro/ }).click();
-  await expect(page.getByRole('heading', { name: 'Honorários e pagamentos InfinitePay' })).toBeVisible();
+  await expect(page.getByText('Nova cobrança InfinitePay', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Sair da sessão' }).click();
   await expect(page.getByRole('heading', { name: 'Acesso ao escritório' })).toBeVisible();
   expect(errors).toEqual([]);

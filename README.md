@@ -1,10 +1,10 @@
 # M14 Advocacia — Matheus Moraes
 
-Portal público (Fases 1–2) e CRM interno (Fase 3). React + Vite + TypeScript + Tailwind, Supabase Auth/Postgres e hospedagem Vercel.
+Portal público (Fases 1–2) e CRM interno (Fases 3–4), agenda e financeiro InfinitePay. React + Vite + TypeScript + Tailwind, Supabase Auth/Postgres e hospedagem Vercel.
 
 ## Desenvolvimento
 
-Requer Node.js 22+ e npm. A estrutura original foi recuperada do ZIP versionado; os arquivos de aplicação ficam em `src/`, os SQLs em `supabase/review/` e a Edge Function em `supabase/functions/leads-intake/`.
+Requer Node.js 22+ e npm. A estrutura original foi recuperada do ZIP versionado; os arquivos de aplicação ficam em `src/`, os SQLs em `supabase/review/` e as Edge Functions em `supabase/functions/`.
 
 ```sh
 npm install
@@ -20,7 +20,10 @@ Preencha `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY` com os valores p�
 - `/crm/login`: acesso de membros ativos; sem cadastro público de equipe.
 - `/crm`: funil com seis etapas, busca, resumo dos leads e conversão.
 - `/crm/clientes`: clientes, contato, endereço e casos vinculados.
-- `/crm/agenda` e `/crm/financeiro`: módulos identificados como Fase 4, sem operações habilitadas.
+- `/crm/conta`: perfil e alteração da própria senha com confirmação e mínimo de 8 caracteres.
+- `/crm/agenda`: calendário, criação/edição de compromissos e calculadora auxiliar de prazos CPC.
+- `/crm/financeiro`: cobranças InfinitePay, consultas pagas e conferência no provedor.
+- `/pagamento/retorno`: retorno público do comprador, sem baixa por parâmetros da URL.
 
 ## Intake público e Turnstile
 
@@ -30,7 +33,7 @@ A Edge Function usa `public.check_intake_rate_limit`, executável somente por `s
 
 ## Supabase e Vercel
 
-Siga o [checklist de aplicação da Fase 3](docs/fase3-aplicacao.md). Os SQLs são scripts de revisão, não migrations registradas no CLI. Não use `supabase db push` esperando que ele encontre `supabase/review/`.
+Siga o [checklist da Fase 3](docs/fase3-aplicacao.md) e o [checklist da Fase 4](docs/fase4-aplicacao.md). A Fase 4 acrescenta o SQL `phase4-agenda-finance.sql` e as funções `appointments`, `infinitepay-checkout` e `infinitepay-webhook`. A integração financeira fica desabilitada até configurar e habilitar `INFINITEPAY_ENABLED` no backend. Os SQLs são scripts de revisão, não migrations registradas no CLI. Não use `supabase db push` esperando que ele encontre `supabase/review/`.
 
 ## Validação
 
@@ -40,6 +43,6 @@ npm test
 npm run test:browser
 ```
 
-`npm test` aplica as três fases em Postgres WASM descartável (PGlite), exercita RLS, ACLs, RPC, deduplicação, conflitos e rollback. Não acessa o banco hospedado. Os testes da Edge Function executam o código em runtime simulado com respostas de Siteverify/Supabase controladas, incluindo falha fechada. Os testes de navegador usam Chromium e simulam as respostas HTTP do Supabase/BrasilAPI; verificam a interface e o contrato das chamadas. Por padrão usam `/usr/bin/chromium`; informe `CHROMIUM_PATH` para outro executável. Uma instalação local também pode usar `npx playwright install chromium` e apontar `CHROMIUM_PATH` para o binário instalado.
+`npm test` aplica as quatro fases em Postgres WASM descartável (PGlite), exercita RLS, ACLs, RPC, deduplicação, conflitos e rollback. Não acessa o banco hospedado. Os testes da Edge Function executam o código em runtime simulado com respostas de Siteverify/Supabase controladas, incluindo falha fechada, aprovação financeira e callbacks inválidos. Os testes de prazos cobrem o CPC e as conversões de fuso. Os testes de navegador usam Chromium e simulam as respostas HTTP do Supabase/BrasilAPI/InfinitePay; verificam a interface e o contrato das chamadas. Por padrão usam `/usr/bin/chromium`; informe `CHROMIUM_PATH` para outro executável. Uma instalação local também pode usar `npx playwright install chromium` e apontar `CHROMIUM_PATH` para o binário instalado.
 
 A confirmação final no Supabase/Vercel requer aplicar os scripts, configurar os valores públicos e usar uma conta interna. Nenhum SQL é aplicado automaticamente pelo build.

@@ -1,5 +1,6 @@
 import { lazy, Suspense, useState } from 'react';
 import { PracticeAreaKey } from './data/office';
+import { PaymentReturn } from './components/PaymentReturn';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { PracticeAreas } from './components/PracticeAreas';
@@ -11,6 +12,7 @@ import { Footer } from './components/Footer';
 const CrmApp = lazy(() => import('./crm/CrmApp'));
 
 export function App() {
+  if (window.location.pathname === '/pagamento/retorno') return <PaymentReturn/>;
   if (window.location.pathname === '/crm' || window.location.pathname.startsWith('/crm/')) {
     return <Suspense fallback={<p role="status">Carregando escritório…</p>}><CrmApp /></Suspense>;
   }

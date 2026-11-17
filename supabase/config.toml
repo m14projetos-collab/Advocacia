@@ -2,3 +2,14 @@ project_id = "neotdgoftxkfaljpmddk"
 
 [functions.leads-intake]
 verify_jwt = false
+
+# JWT validado explicitamente por getUser na Edge, compatível com publishable keys.
+[functions.appointments]
+verify_jwt = false
+
+[functions.infinitepay-checkout]
+verify_jwt = false
+
+# Endpoint do provedor: confirmação server-to-server em payment_check obrigatória.
+[functions.infinitepay-webhook]
+verify_jwt = false
