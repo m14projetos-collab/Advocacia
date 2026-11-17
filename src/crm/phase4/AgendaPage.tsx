@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { Case, Lead, message } from "../types";
+import { contextLink } from "../phase5/types";
 import { AppointmentForm } from "./AppointmentForm";
 import { DeadlineCalculator } from "./DeadlineCalculator";
 import {
@@ -68,6 +69,19 @@ export function AgendaPage({ leads, cases }: { leads: Lead[]; cases: Case[] }) {
     void load();
     return () => controller.current?.abort();
   }, [load]);
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get('appointment_id');
+    if (!requested || !/^[0-9a-f-]{36}$/i.test(requested)) return;
+    let alive = true;
+    void (async () => {
+      const {data,error:requestError}=await supabase!.from('appointments').select('id,title,type,starts_at,ends_at,lead_id,case_id,meeting_url,payment_required,status,updated_at').eq('id',requested).single();
+      if(!alive)return;
+      if(requestError||!data){setError('Compromisso não encontrado ou sem acesso.');return;}
+      const appointment=data as Appointment,date=officeDate(appointment.starts_at);
+      setMonth(date.slice(0,7));setDay(date);setEditor({id:appointment.id,date,existing:appointment});
+    })();
+    return()=>{alive=false;};
+  }, []);
   const onDay = (date: string) => {
     const bounds = dayBounds(date);
     return items.filter(
@@ -201,6 +215,9 @@ export function AgendaPage({ leads, cases }: { leads: Lead[]; cases: Case[] }) {
                     </a>
                   )}
                 </div>
+                <div className="crm-actions">
+                {(a.case_id || a.lead_id) && <a href={contextLink('/crm/hub', {...(a.case_id?{case_id:a.case_id}:{}),...(a.lead_id?{lead_id:a.lead_id}:{})})}>Abrir ficha e histórico →</a>}
+                {a.payment_required && a.status==='pendente' && (a.case_id?cases.find(k=>k.id===a.case_id)?.client_id:leads.find(l=>l.id===a.lead_id)?.converted_client_id) && <a href={contextLink('/crm/financeiro', {...(a.case_id?{case_id:a.case_id}:{}),...(a.lead_id?{lead_id:a.lead_id}:{}),client_id:(a.case_id?cases.find(k=>k.id===a.case_id)?.client_id:leads.find(l=>l.id===a.lead_id)?.converted_client_id)!}, {appointment_id:a.id})}>Cobrar consulta →</a>}
                 <button
                   onClick={() =>
                     setEditor({
@@ -211,7 +228,7 @@ export function AgendaPage({ leads, cases }: { leads: Lead[]; cases: Case[] }) {
                   }
                 >
                   Editar compromisso
-                </button>
+                </button></div>
               </article>
             ))}
           </div>

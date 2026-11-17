@@ -23,8 +23,8 @@ export const OFFICE_DATA = {
   whatsappE164: '5513996764688',
   email: 'matheusmoraesadvogado@gmail.com',
   address: 'Av. Conselheiro Nébias, 756, cj. 2421 — Helbor Offices, Vila Rica, Santos/SP',
-  profilePhoto: 'https://matheusmoraes.startdigital1.com.br/wp-content/uploads/2025/09/5-683x1024.jpg',
-  logoUrl: 'https://matheusmoraes.startdigital1.com.br/wp-content/uploads/2025/08/logo.png',
+  profilePhoto: '/office/profile.jpg',
+  logoUrl: '/office/logo.png',
 };
 
 export const PRACTICE_AREAS: PracticeAreaItem[] = [
@@ -47,7 +47,7 @@ export const PRACTICE_AREAS: PracticeAreaItem[] = [
     title: 'Direito Médico e da Saúde',
     subtitle: 'Pacientes e profissionais da saúde',
     description:
-      'Assessoria jurídica célere para garantia de tratamentos essenciais junto a operadoras e defesa técnica de profissionais médicos.',
+      'Análise jurídica de demandas sobre tratamentos e cobertura de saúde, além de defesa técnica de profissionais médicos.',
     topics: [
       'Pedidos liminares para cirurgias, exames e medicamentos de alto custo',
       'Negativas indevidas de cobertura por planos de saúde',

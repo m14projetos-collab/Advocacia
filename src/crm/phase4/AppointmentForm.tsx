@@ -1,5 +1,6 @@
 import { FormEvent, useState } from "react";
 import { Case, Lead, message } from "../types";
+import { contextFromUrl } from "../phase5/types";
 import { invoke } from "./api";
 import { fromOfficeInput, officeInput } from "./time";
 import { Appointment, APPOINTMENT_STATUS, APPOINTMENT_TYPES } from "./types";
@@ -30,8 +31,9 @@ export function AppointmentForm({
   const [end, setEnd] = useState(
     existing ? officeInput(existing.ends_at) : `${date}T10:00`,
   );
-  const [caseId, setCaseId] = useState(existing?.case_id ?? "");
-  const [leadId, setLeadId] = useState(existing?.lead_id ?? "");
+  const initial = contextFromUrl();
+  const [caseId, setCaseId] = useState(existing?.case_id ?? initial.case_id ?? "");
+  const [leadId, setLeadId] = useState(existing?.lead_id ?? initial.lead_id ?? "");
   const [meeting, setMeeting] = useState(existing?.meeting_url ?? "");
   const [required, setRequired] = useState(existing?.payment_required ?? false);
   const [status, setStatus] = useState(existing?.status ?? "pendente");

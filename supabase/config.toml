@@ -13,3 +13,18 @@ verify_jwt = false
 # Endpoint do provedor: confirmação server-to-server em payment_check obrigatória.
 [functions.infinitepay-webhook]
 verify_jwt = false
+
+[functions.case-hub]
+verify_jwt = false
+[functions.whatsapp-send]
+verify_jwt = false
+[functions.whatsapp-webhook]
+verify_jwt = false
+[functions.whatsapp-evolution-relay]
+verify_jwt = false
+[functions.case-files]
+verify_jwt = false
+[functions.datajud-lookup]
+verify_jwt = false
+[functions.legal-agent]
+verify_jwt = false

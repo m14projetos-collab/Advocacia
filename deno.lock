@@ -1,0 +1,30 @@
+{
+  "version": "5",
+  "remote": {
+    "https://esm.sh/@supabase/supabase-js@2.46.1": "2bbc3d3c05dbc9df3720aa2c357c3fe18286bf79b37c9e091fd1f7b88b8f801c"
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:@electric-sql/pglite@0.5.16",
+        "npm:@fontsource/cormorant-garamond@5.3.0",
+        "npm:@fontsource/jetbrains-mono@5.3.0",
+        "npm:@fontsource/plus-jakarta-sans@5.3.0",
+        "npm:@playwright/test@1.65.1",
+        "npm:@supabase/supabase-js@2.119.0",
+        "npm:@types/react-dom@^18.3.5",
+        "npm:@types/react@^18.3.12",
+        "npm:@vitejs/plugin-react@^4.3.3",
+        "npm:ai@7.0.173",
+        "npm:autoprefixer@^10.4.20",
+        "npm:lucide-react@0.460",
+        "npm:postcss@^8.4.49",
+        "npm:react-dom@^18.3.1",
+        "npm:react@^18.3.1",
+        "npm:tailwindcss@^3.4.14",
+        "npm:typescript@^5.6.3",
+        "npm:vite@^5.4.10"
+      ]
+    }
+  }
+}

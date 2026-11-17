@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "../../lib/supabase";
 import { Case, Client, Lead, message } from "../types";
+import { contextFromUrl, contextLink } from "../phase5/types";
 import { invoke } from "./api";
 import { Appointment, Payment, PAYMENT_STATUS, safeHttps } from "./types";
 import { officeInput } from "./time";
@@ -33,9 +34,10 @@ export function FinancePage({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [id, setId] = useState(() => crypto.randomUUID());
-  const [client, setClient] = useState("");
-  const [caseId, setCaseId] = useState("");
-  const [appointment, setAppointment] = useState("");
+  const initial = contextFromUrl();
+  const [client, setClient] = useState(initial.client_id ?? cases.find(k=>k.id===initial.case_id)?.client_id ?? "");
+  const [caseId, setCaseId] = useState(initial.case_id ?? "");
+  const [appointment, setAppointment] = useState(new URLSearchParams(window.location.search).get("appointment_id") ?? "");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [fee, setFee] = useState("consulta");
@@ -99,6 +101,16 @@ export function FinancePage({
     void load();
     return () => controller.current?.abort();
   }, [load]);
+  const prefilled = useRef(false);
+  useEffect(()=>{
+    const requested=new URLSearchParams(window.location.search).get('appointment_id');
+    if(loading||!requested||prefilled.current)return;
+    prefilled.current=true;
+    const slot=appointments.find(a=>a.id===requested);
+    if(slot){setCaseId(slot.case_id??'');setClient(slot.case_id?cases.find(k=>k.id===slot.case_id)?.client_id??'':leads.find(l=>l.id===slot.lead_id)?.converted_client_id??'');setAppointment(slot.id);}
+    else{setAppointment('');setNotice('Consulta não disponível para nova cobrança pendente. Confira os pagamentos já vinculados.');}
+  },[loading,appointments,cases,leads]);
+  const visible = client ? items.filter(p=>p.client_id===client) : items;
   const relevantAppointments = appointments.filter((a) =>
     a.case_id
       ? cases.find((k) => k.id === a.case_id)?.client_id === client
@@ -191,7 +203,7 @@ export function FinancePage({
         <span>
           <strong>
             {currency(
-              items
+              visible
                 .filter((p) => ["paid", "settled"].includes(p.status))
                 .reduce((n, p) => n + Number(p.amount_cents), 0),
             )}
@@ -201,7 +213,7 @@ export function FinancePage({
         <span>
           <strong>
             {currency(
-              items
+              visible
                 .filter((p) => p.status === "pending")
                 .reduce((n, p) => n + Number(p.amount_cents), 0),
             )}
@@ -209,7 +221,7 @@ export function FinancePage({
           pendentes
         </span>
       </div>
-      <details className="crm-editor">
+      <details className="crm-editor" open={Boolean(initial.client_id || initial.case_id || new URLSearchParams(window.location.search).get("appointment_id"))}>
         <summary>Nova cobrança InfinitePay</summary>
         <form className="crm-stack" onSubmit={create}>
           <fieldset disabled={busy} className="crm-stack">
@@ -335,7 +347,7 @@ export function FinancePage({
       )}
       {loading ? (
         <p role="status">Carregando cobranças…</p>
-      ) : items.length === 0 ? (
+      ) : visible.length === 0 ? (
         <p className="crm-empty">Nenhuma cobrança cadastrada.</p>
       ) : (
         <div className="crm-table-scroll">
@@ -350,12 +362,12 @@ export function FinancePage({
               </tr>
             </thead>
             <tbody>
-              {items.map((p) => (
+              {visible.map((p) => (
                 <tr key={p.id}>
                   <td>
                     {clients.find((c) => c.id === p.client_id)?.full_name ??
                       "Cliente vinculado"}
-                    <p>{p.description}</p>
+                    <p><a href={contextLink("/crm/hub", {client_id:p.client_id,...(p.case_id?{case_id:p.case_id}:{})})}>{p.description} · abrir ficha →</a></p>
                     <small>{p.order_nsu}</small>
                   </td>
                   <td>
