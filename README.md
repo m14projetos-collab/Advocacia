@@ -1,6 +1,6 @@
 # M14 Advocacia — Matheus Moraes
 
-Portal público (Fases 1–2) e CRM interno (Fases 3–4), agenda e financeiro InfinitePay. React + Vite + TypeScript + Tailwind, Supabase Auth/Postgres e hospedagem Vercel.
+Portal público (Fases 1–2) e CRM interno (Fases 3–5), agenda e financeiro InfinitePay. React + Vite + TypeScript + Tailwind, Supabase Auth/Postgres e hospedagem Vercel.
 
 ## Desenvolvimento
 
@@ -31,9 +31,13 @@ O envio só é habilitado com `VITE_INTAKE_ENABLED=true`, uma `VITE_TURNSTILE_SI
 
 A Edge Function usa `public.check_intake_rate_limit`, executável somente por `service_role`, mantendo `m14_private` fora da Data API. CAPTCHA, configuração ou RPC com falha bloqueiam o INSERT. Reaplicar o SQL da Fase 2 corrigido e publicar a Edge Function antes de habilitar o intake.
 
+## Hub jurídico, WhatsApp, documentos e IA
+
+`/crm/hub` reúne conversa, ligações, documentos privados, casos, agenda e financeiro por contexto. Os atalhos levam os IDs existentes; não recadastram o cliente. `/crm/agente` é exclusivo do admin para exemplos de estilo e conhecimento. A IA é interna e revisável; não envia respostas automaticamente. DataJud consulta somente metadados públicos, sem contornar sigilo.
+
 ## Supabase e Vercel
 
-Siga o [checklist da Fase 3](docs/fase3-aplicacao.md) e o [checklist da Fase 4](docs/fase4-aplicacao.md). A Fase 4 acrescenta o SQL `phase4-agenda-finance.sql` e as funções `appointments`, `infinitepay-checkout` e `infinitepay-webhook`. A integração financeira fica desabilitada até configurar e habilitar `INFINITEPAY_ENABLED` no backend. Os SQLs são scripts de revisão, não migrations registradas no CLI. Não use `supabase db push` esperando que ele encontre `supabase/review/`.
+Siga o [checklist único de implantação](docs/implantacao-unica.md) e o [relatório de auditoria/benchmark](docs/fase5-auditoria.md). Os SQLs em `supabase/review/` são revisões, não migrations descobertas por `db push`. A Fase 5 acrescenta `phase5-whatsapp-ai.sql` e as Edge Functions descritas no checklist. Nenhum SQL é aplicado pelo build, e flags de integração permanecem desabilitadas até configuração/aceite.
 
 ## Validação
 
@@ -43,6 +47,6 @@ npm test
 npm run test:browser
 ```
 
-`npm test` aplica as quatro fases em Postgres WASM descartável (PGlite), exercita RLS, ACLs, RPC, deduplicação, conflitos e rollback. Não acessa o banco hospedado. Os testes da Edge Function executam o código em runtime simulado com respostas de Siteverify/Supabase controladas, incluindo falha fechada, aprovação financeira e callbacks inválidos. Os testes de prazos cobrem o CPC e as conversões de fuso. Os testes de navegador usam Chromium e simulam as respostas HTTP do Supabase/BrasilAPI/InfinitePay; verificam a interface e o contrato das chamadas. Por padrão usam `/usr/bin/chromium`; informe `CHROMIUM_PATH` para outro executável. Uma instalação local também pode usar `npx playwright install chromium` e apontar `CHROMIUM_PATH` para o binário instalado.
+`npm test` aplica as cinco fases em suítes de integração em Postgres WASM descartável (PGlite), exercita RLS, ACLs, RPC, deduplicação, conflitos e rollback. Não acessa o banco hospedado. Os testes da Edge Function executam o código em runtime simulado com respostas de Siteverify/Supabase controladas, incluindo falha fechada, aprovação financeira e callbacks inválidos. Os testes de prazos cobrem o CPC e as conversões de fuso. Os testes de navegador usam Chromium e simulam as respostas HTTP do Supabase/BrasilAPI/InfinitePay/WhatsApp/IA; verificam a interface e o contrato das chamadas. Por padrão usam `/usr/bin/chromium`; informe `CHROMIUM_PATH` para outro executável. Uma instalação local também pode usar `npx playwright install chromium` e apontar `CHROMIUM_PATH` para o binário instalado.
 
 A confirmação final no Supabase/Vercel requer aplicar os scripts, configurar os valores públicos e usar uma conta interna. Nenhum SQL é aplicado automaticamente pelo build.

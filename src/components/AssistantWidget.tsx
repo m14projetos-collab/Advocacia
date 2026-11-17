@@ -40,8 +40,7 @@ export function AssistantWidget({ onSelectArea }: AssistantWidgetProps) {
 
           <div className="space-y-3 p-4 text-xs text-slate-300">
             <p className="leading-relaxed">
-              Olá! Posso direcionar seu atendimento para a área correta do escritório e
-              preparar seu resumo para o Dr. Matheus Moraes. Qual tema melhor descreve seu caso?
+              Olá! Posso direcionar seu atendimento para a área correta do escritório. Qual tema melhor descreve seu caso?
             </p>
             <div className="space-y-2">
               {PRACTICE_AREAS.map((area) => (

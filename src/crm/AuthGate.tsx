@@ -1,8 +1,10 @@
 import { FormEvent, ReactNode, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { OfficeRole } from './OfficeRole';
 import { message } from './types';
 
 export function AuthGate({ children }: { children: ReactNode }) {
+  const [role, setRole] = useState<'staff'|'admin'>('staff');
   const [active, setActive] = useState(false);
   const [checking, setChecking] = useState(true);
   const [error, setError] = useState('');
@@ -21,14 +23,14 @@ export function AuthGate({ children }: { children: ReactNode }) {
         const { data: { user }, error: userError } = await db!.auth.getUser();
         if (!alive || current !== version) return;
         if (userError || !user) { setActive(false); setChecking(false); return; }
-        const { data, error: profileError } = await db!.from('profiles').select('id,is_active')
+        const { data, error: profileError } = await db!.from('profiles').select('id,is_active,role')
           .eq('id', user.id).eq('is_active', true).maybeSingle();
         if (!alive || current !== version) return;
         if (profileError || !data) {
           setActive(false);
           setError('Seu usuário não possui um perfil ativo no escritório. Solicite acesso ao administrador.');
           await db!.auth.signOut({ scope: 'local' });
-        } else { setActive(true); setError(''); }
+        } else { setRole(data.role === 'admin' ? 'admin' : 'staff'); setActive(true); setError(''); }
       } catch {
         if (alive && current === version) { setActive(false); setError('Não foi possível verificar seu acesso. Tente entrar novamente.'); }
       } finally { if (alive && current === version) setChecking(false); }
@@ -68,7 +70,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }
 
   if (checking) return <div className="crm-login" role="status">Verificando acesso ao escritório…</div>;
-  if (active && !login) return <>{children}</>;
+  if (active && !login) return <OfficeRole.Provider value={role}>{children}</OfficeRole.Provider>;
   return <main className="crm-login">
     <div className="crm-login-card">
       <a href="/" className="crm-brand">M14 <span>ADVOCACIA</span></a>
